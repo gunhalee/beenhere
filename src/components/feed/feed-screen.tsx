@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
+import { fetchMyProfileClient } from "@/lib/api/profile-client";
 import {
   getCurrentBrowserCoordinates,
   isGeoPermissionDenied,
@@ -17,8 +18,8 @@ import { FeedReportDialog } from "./feed-report-dialog";
 import { ComposeSheet } from "./compose-sheet";
 
 type Props = {
-  currentUserId: string | null;
-  currentNickname: string | null;
+  currentUserId?: string | null;
+  currentNickname?: string | null;
 };
 
 type ComposeState =
@@ -26,30 +27,78 @@ type ComposeState =
   | { open: true; coords: Coordinates };
 
 export function FeedScreen({ currentUserId, currentNickname }: Props) {
-  const { state, coordsRef, refresh, loadMore, updateItem, removeItem, prependItem, requestLocation } =
-    useFeed();
-  const { reportState, handleLike, handleDelete, openReport, closeReport, handleReport } =
-    usePostActions({ updateItem, removeItem, coordsRef });
-
+  const [resolvedCurrentUserId, setResolvedCurrentUserId] = useState<string | null>(
+    currentUserId ?? null,
+  );
+  const [resolvedCurrentNickname, setResolvedCurrentNickname] = useState<string | null>(
+    currentNickname ?? null,
+  );
   const [composeState, setComposeState] = useState<ComposeState>({ open: false });
   const [composeLocating, setComposeLocating] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
+  const [postActionError, setPostActionError] = useState<string | null>(null);
 
-  const locationAvailable = !state.locationDenied && coordsRef.current !== null;
+  const {
+    state,
+    coordsRef,
+    refresh,
+    loadMore,
+    updateItem,
+    removeItem,
+    prependItem,
+    requestLocation,
+  } = useFeed();
 
-  // 피드에 표시할 첫 번째 장소 라벨 (헤더 위치 표시용)
+  const {
+    reportState,
+    handleLike,
+    handleDelete,
+    openReport,
+    closeReport,
+    handleReport,
+  } = usePostActions<FeedItem>({
+    updateItem,
+    removeItem,
+    coordsRef,
+    onLocationError: setPostActionError,
+  });
+
+  const locationAvailable = !state.locationDenied;
   const firstPlaceLabel = state.items[0]?.placeLabel ?? null;
 
-  // ---------------------------
-  // 글 작성 FAB
-  // ---------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveCurrentProfile() {
+      const result = await fetchMyProfileClient();
+      if (cancelled) return;
+
+      if (!result.ok) {
+        if (result.code === "UNAUTHORIZED") {
+          setResolvedCurrentUserId(null);
+          setResolvedCurrentNickname(null);
+        }
+        return;
+      }
+
+      setResolvedCurrentUserId(result.data.id);
+      setResolvedCurrentNickname(result.data.nickname);
+    }
+
+    void resolveCurrentProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleComposeClick() {
     if (composeLocating) return;
 
     setComposeError(null);
+    setPostActionError(null);
 
-    // 로그인 체크
-    if (!currentUserId) {
+    if (!resolvedCurrentUserId) {
       window.location.href = "/auth/login";
       return;
     }
@@ -57,14 +106,14 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     setComposeLocating(true);
 
     try {
-      // 작성 시에는 항상 최신 위치를 새로 요청한다
       const coords = await getCurrentBrowserCoordinates();
-      // 좌표도 피드용으로 갱신
       coordsRef.current = coords;
       setComposeState({ open: true, coords });
     } catch (err) {
       if (isGeoPermissionDenied(err)) {
-        setComposeError("위치 권한을 허용하면 글을 남길 수 있어요. 브라우저 설정을 확인해 주세요.");
+        setComposeError(
+          "위치 권한을 허용하면 글을 남길 수 있어요. 브라우저 설정을 확인해 주세요.",
+        );
       } else {
         setComposeError("현재 위치를 확인하지 못했어요. 다시 시도해 주세요.");
       }
@@ -82,13 +131,28 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     prependItem(newItem);
   }
 
-  // ---------------------------
-  // 라이크: 좌표 없으면 막기
-  // ---------------------------
-  function handleLikeWithCheck(item: FeedItem) {
-    if (!coordsRef.current) return;
-    handleLike(item);
-  }
+  const handleLikeClick = useCallback(
+    (item: FeedItem) => {
+      setPostActionError(null);
+      void handleLike(item);
+    },
+    [handleLike],
+  );
+
+  const handleDeleteClick = useCallback(
+    (postId: string) => {
+      void handleDelete(postId);
+    },
+    [handleDelete],
+  );
+
+  const handleOpenReport = useCallback(
+    (postId: string) => {
+      setPostActionError(null);
+      openReport(postId);
+    },
+    [openReport],
+  );
 
   return (
     <div
@@ -103,19 +167,16 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         width: "100%",
       }}
     >
-      {/* 헤더 */}
       <FeedHeader
         placeLabel={firstPlaceLabel}
-        currentUserId={currentUserId}
-        currentNickname={currentNickname}
+        currentUserId={resolvedCurrentUserId}
+        currentNickname={resolvedCurrentNickname}
       />
 
-      {/* 위치 권한 배너 */}
       {state.locationDenied ? (
         <FeedLocationBanner onRequestPermission={requestLocation} />
       ) : null}
 
-      {/* 글 작성 에러 메시지 (위치 거부 시) */}
       {composeError ? (
         <div
           role="alert"
@@ -134,7 +195,24 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         </div>
       ) : null}
 
-      {/* 피드 스크롤 영역 */}
+      {postActionError ? (
+        <div
+          role="alert"
+          style={{
+            background: "#fef2f2",
+            borderBottom: "1px solid #fecaca",
+            color: "#b91c1c",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            padding: "10px 20px",
+            position: "relative",
+            zIndex: 3,
+          }}
+        >
+          {postActionError}
+        </div>
+      ) : null}
+
       <div
         style={{
           flex: 1,
@@ -146,21 +224,19 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       >
         <FeedList
           state={state}
-          currentUserId={currentUserId}
+          currentUserId={resolvedCurrentUserId}
           locationAvailable={locationAvailable}
-          onLike={handleLikeWithCheck}
-          onDelete={handleDelete}
-          onReport={openReport}
+          onLike={handleLikeClick}
+          onDelete={handleDeleteClick}
+          onReport={handleOpenReport}
           onLoadMore={loadMore}
           onRetry={refresh}
           onCompose={handleComposeClick}
         />
       </div>
 
-      {/* 글 작성 FAB */}
       <FeedComposeFab loading={composeLocating} onClick={handleComposeClick} />
 
-      {/* 신고 다이얼로그 */}
       {reportState.postId ? (
         <FeedReportDialog
           reportState={reportState}
@@ -169,12 +245,11 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         />
       ) : null}
 
-      {/* 글 작성 시트 */}
       {composeState.open ? (
         <ComposeSheet
           coords={composeState.coords}
-          currentUserId={currentUserId}
-          currentNickname={currentNickname}
+          currentUserId={resolvedCurrentUserId}
+          currentNickname={resolvedCurrentNickname}
           onSuccess={handleComposeSuccess}
           onDismiss={handleDismissCompose}
         />

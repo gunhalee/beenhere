@@ -1,6 +1,7 @@
 import { ok, fail } from "@/lib/api/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasSupabaseBrowserConfig, hasSupabaseServerConfig } from "@/lib/supabase/config";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { generateNickname } from "@/lib/nickname/generate";
 import {
   getMyProfileRepository,
@@ -12,7 +13,7 @@ export async function GET() {
   if (!hasSupabaseBrowserConfig()) {
     return ok({
       id: "mock-user-id",
-      nickname: generateNickname(),
+      nickname: formatNicknameForDisplay(generateNickname()),
       nicknameChangedAt: null,
     });
   }
@@ -33,7 +34,7 @@ export async function GET() {
 // PATCH /api/profiles/me — 닉네임 재생성
 export async function PATCH() {
   if (!hasSupabaseBrowserConfig()) {
-    return ok({ nickname: generateNickname() });
+    return ok({ nickname: formatNicknameForDisplay(generateNickname()) });
   }
 
   const profile = await getMyProfileRepository();
@@ -59,7 +60,7 @@ export async function PATCH() {
 // POST /api/profiles/me — 온보딩: 프로필 생성 (최초 1회)
 export async function POST(request: Request) {
   if (!hasSupabaseServerConfig()) {
-    return ok({ nickname: generateNickname() });
+    return ok({ nickname: formatNicknameForDisplay(generateNickname()) });
   }
 
   let body: unknown;
@@ -113,5 +114,5 @@ export async function POST(request: Request) {
     return fail("프로필 생성에 실패했습니다.", 500);
   }
 
-  return ok({ nickname });
+  return ok({ nickname: formatNicknameForDisplay(nickname) });
 }

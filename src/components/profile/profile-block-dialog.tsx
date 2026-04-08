@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { blockUserClient } from "@/lib/api/profile-client";
+import { blockUserClient, unblockUserClient } from "@/lib/api/profile-client";
 
 type Props = {
   targetNickname: string;
   targetUserId: string;
   onBlocked: () => void;
+  onUnblocked?: () => void;
   onClose: () => void;
 };
 
@@ -14,25 +15,45 @@ export function ProfileBlockDialog({
   targetNickname,
   targetUserId,
   onBlocked,
+  onUnblocked,
   onClose,
 }: Props) {
-  const [loading, setLoading] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [unblockLoading, setUnblockLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loading = blockLoading || unblockLoading;
 
-  async function handleConfirm() {
+  async function handleBlock() {
     if (loading) return;
-    setLoading(true);
+    setBlockLoading(true);
     setError(null);
 
     const result = await blockUserClient(targetUserId);
 
     if (!result.ok) {
-      setLoading(false);
+      setBlockLoading(false);
       setError(result.error ?? "차단에 실패했어요. 다시 시도해 주세요.");
       return;
     }
 
     onBlocked();
+  }
+
+  async function handleUnblock() {
+    if (loading) return;
+    setUnblockLoading(true);
+    setError(null);
+
+    const result = await unblockUserClient(targetUserId);
+
+    if (!result.ok) {
+      setUnblockLoading(false);
+      setError(result.error ?? "차단 해제에 실패했어요. 다시 시도해 주세요.");
+      return;
+    }
+
+    onUnblocked?.();
+    onClose();
   }
 
   return (
@@ -133,7 +154,7 @@ export function ProfileBlockDialog({
           </button>
           <button
             disabled={loading}
-            onClick={handleConfirm}
+            onClick={handleBlock}
             type="button"
             style={{
               appearance: "none",
@@ -148,9 +169,28 @@ export function ProfileBlockDialog({
               padding: "12px",
             }}
           >
-            {loading ? "처리 중…" : "차단하기"}
+            {blockLoading ? "차단 중…" : "차단하기"}
           </button>
         </div>
+        <button
+          disabled={loading}
+          onClick={handleUnblock}
+          type="button"
+          style={{
+            appearance: "none",
+            background: "none",
+            border: "none",
+            color: loading ? "#9ca3af" : "#2563eb",
+            cursor: loading ? "default" : "pointer",
+            fontSize: "13px",
+            fontWeight: 500,
+            marginTop: "12px",
+            textAlign: "center",
+            width: "100%",
+          }}
+        >
+          {unblockLoading ? "해제 중…" : "차단 해제하기"}
+        </button>
       </div>
     </>
   );

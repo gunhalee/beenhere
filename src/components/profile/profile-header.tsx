@@ -55,8 +55,7 @@ export function ProfileHeader({
         backdropFilter: "blur(10px)",
         background: "rgba(255, 255, 255, 0.95)",
         borderBottom: "1px solid rgba(17, 24, 39, 0.06)",
-        padding:
-          "calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px",
+        padding: "calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px",
         position: "sticky",
         top: 0,
         zIndex: 4,
@@ -70,7 +69,6 @@ export function ProfileHeader({
           justifyContent: "space-between",
         }}
       >
-        {/* 뒤로 가기 */}
         <button
           aria-label="뒤로"
           onClick={() => router.back()}
@@ -90,16 +88,16 @@ export function ProfileHeader({
           ←
         </button>
 
-        {/* 닉네임 */}
         <h1
           style={{
             color: "#111827",
             flex: 1,
-            fontSize: "16px",
+            fontSize: "15px",
             fontWeight: 700,
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.01em",
             margin: 0,
             overflow: "hidden",
+            textAlign: "center",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}
@@ -107,7 +105,6 @@ export function ProfileHeader({
           {nickname}
         </h1>
 
-        {/* 메뉴 버튼 */}
         <div style={{ position: "relative" }}>
           <button
             aria-label="메뉴"
@@ -151,7 +148,7 @@ export function ProfileHeader({
                   border: "1px solid #e5e7eb",
                   borderRadius: "12px",
                   boxShadow: "0 8px 24px rgba(17, 24, 39, 0.12)",
-                  minWidth: "160px",
+                  minWidth: "170px",
                   overflow: "hidden",
                   position: "absolute",
                   right: 0,
@@ -165,7 +162,7 @@ export function ProfileHeader({
                       disabled={!canRegen || regenLoading}
                       onClick={() => {
                         setMenuOpen(false);
-                        handleRegenNickname();
+                        void handleRegenNickname();
                       }}
                       type="button"
                       style={{
@@ -188,7 +185,7 @@ export function ProfileHeader({
                         ? "변경 중…"
                         : canRegen
                           ? "닉네임 재생성"
-                          : `닉네임 재생성 (${COOLDOWN_DAYS}일 후 가능)`}
+                          : `닉네임 재생성 (${COOLDOWN_DAYS}일마다 가능)`}
                     </button>
                     <Link
                       href="/auth/logout"

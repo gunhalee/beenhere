@@ -2,7 +2,7 @@
 // beenhere — API 요청/응답 타입 (Next.js Route Handler)
 // =============================================================
 
-import type { FeedCursor, FeedItem, ProfileLikeItem, ProfilePostItem, PostLikerItem } from './domain';
+import type { FeedItem, ProfileLikeItem, ProfilePostItem, PostLikerItem } from './domain';
 
 // ---------------------------
 // 공통 API 응답 래퍼

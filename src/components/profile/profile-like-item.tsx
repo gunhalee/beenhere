@@ -10,7 +10,6 @@ type Props = {
   likerNickname: string;
   onReport: (postId: string) => void;
   onLike?: (item: ProfileLikeItem) => void;
-  locationAvailable: boolean;
 };
 
 export function ProfileLikeItem({
@@ -19,7 +18,6 @@ export function ProfileLikeItem({
   likerNickname,
   onReport,
   onLike,
-  locationAvailable,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -179,14 +177,9 @@ export function ProfileLikeItem({
         <button
           aria-label={myLike ? "이미 라이크함" : "라이크"}
           aria-pressed={myLike}
-          disabled={myLike || !locationAvailable}
-          onClick={() => !myLike && locationAvailable && onLike?.(item)}
+          disabled={myLike}
+          onClick={() => !myLike && onLike?.(item)}
           type="button"
-          title={
-            !locationAvailable
-              ? "위치 권한이 있어야 라이크할 수 있어요"
-              : undefined
-          }
           style={{
             alignItems: "center",
             appearance: "none",
@@ -194,7 +187,7 @@ export function ProfileLikeItem({
             border: `1px solid ${myLike ? "#fca5a5" : "#e5e7eb"}`,
             borderRadius: "9999px",
             color: myLike ? "#ef4444" : "#6b7280",
-            cursor: myLike || !locationAvailable ? "default" : "pointer",
+            cursor: myLike ? "default" : "pointer",
             display: "inline-flex",
             flexShrink: 0,
             fontSize: "12px",

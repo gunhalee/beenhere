@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api/response";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { getProfileRepository } from "@/lib/profiles/repository";
 
@@ -8,7 +9,7 @@ export async function GET(_request: Request, context: Context) {
   const { userId } = await context.params;
 
   if (!hasSupabaseBrowserConfig()) {
-    return ok({ id: userId, nickname: "mock_otter" });
+    return ok({ id: userId, nickname: formatNicknameForDisplay("mock_otter") });
   }
 
   try {

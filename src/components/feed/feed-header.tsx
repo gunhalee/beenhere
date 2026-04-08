@@ -26,7 +26,6 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
           justifyContent: "space-between",
         }}
       >
-        {/* 앱 이름 + 현재 위치 */}
         <div
           style={{
             alignItems: "baseline",
@@ -64,7 +63,6 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
           ) : null}
         </div>
 
-        {/* 내 프로필 진입 링크 */}
         {currentUserId ? (
           <Link
             href={`/profile/${currentUserId}`}
@@ -78,7 +76,6 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
               flexShrink: 0,
               fontSize: "12px",
               fontWeight: 600,
-              gap: "4px",
               maxWidth: "120px",
               overflow: "hidden",
               padding: "5px 10px",
@@ -87,7 +84,6 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ flexShrink: 0 }}>👤</span>
             <span
               style={{
                 overflow: "hidden",
@@ -119,3 +115,4 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
     </header>
   );
 }
+

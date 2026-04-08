@@ -10,7 +10,7 @@ import {
 
 export type ProfileTab = "posts" | "likes";
 
-type ListState<T> = {
+export type ProfileListState<T> = {
   items: T[];
   nextCursor: string | null;
   loading: boolean;
@@ -18,7 +18,7 @@ type ListState<T> = {
   errorMessage: string | null;
 };
 
-function initialListState<T>(): ListState<T> {
+function initialListState<T>(): ProfileListState<T> {
   return {
     items: [],
     nextCursor: null,
@@ -28,7 +28,7 @@ function initialListState<T>(): ListState<T> {
   };
 }
 
-type LikersState = {
+export type ProfileLikersState = {
   items: PostLikerItem[];
   nextCursor: string | null;
   loading: boolean;
@@ -36,15 +36,15 @@ type LikersState = {
 
 export function useProfile(userId: string, isMyProfile: boolean) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
-  const [posts, setPosts] = useState<ListState<ProfilePostItem>>(
+  const [posts, setPosts] = useState<ProfileListState<ProfilePostItem>>(
     initialListState(),
   );
-  const [likes, setLikes] = useState<ListState<ProfileLikeItem>>(
+  const [likes, setLikes] = useState<ProfileListState<ProfileLikeItem>>(
     initialListState(),
   );
   // 인라인 라이커 목록: postId → 상태
   const [likersMap, setLikersMap] = useState<
-    Record<string, LikersState | undefined>
+    Record<string, ProfileLikersState | undefined>
   >({});
   // 어떤 postId의 라이커가 확장돼 있는지
   const [expandedLikersId, setExpandedLikersId] = useState<string | null>(null);

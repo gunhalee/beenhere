@@ -2,64 +2,57 @@
  * GET /api/geo/reverse?lat=&lng=
  *
  * GPS 좌표 → 구(區) 수준 장소 라벨 변환.
- * Nominatim(OpenStreetMap) 서버 프록시:
- *   - CORS 우회
+ * Kakao Local API(coord2regioncode) 서버 프록시:
+ *   - REST API 키 서버 보관
  *   - Next.js 캐시(1시간)로 동일 좌표 재호출 방지
- *   - User-Agent 요구사항 충족
  *
  * 반환 예: { placeLabel: "마포구" } | { placeLabel: "해운대구" } | { placeLabel: "제주시" }
  */
 import { fail, ok } from "@/lib/api/response";
 
-const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
+const KAKAO_COORD2REGION_URL =
+  "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
 const REQUEST_TIMEOUT_MS = 6000;
 const CACHE_REVALIDATE_SECONDS = 60 * 60; // 1시간
+const KAKAO_REST_API_KEY = process.env.KAKAO_REST_API_KEY;
 
-// Nominatim geocodejson 응답 타입 (필요한 필드만)
-type NominatimGeocodjson = {
-  features?: Array<{
-    properties?: {
-      geocoding?: {
-        county?: string;
-        city?: string;
-        state?: string;
-        country?: string;
-        country_code?: string;
-        admin?: {
-          level4?: string;  // 시/도  (서울특별시, 경기도)
-          level5?: string;  // 자치구 (마포구, 해운대구)
-          level6?: string;  // 시/군  (소규모 시·군)
-          level8?: string;  // 행정동 (합정동)
-        };
-      };
-    };
+type KakaoCoord2RegionResponse = {
+  documents?: Array<{
+    region_type?: "H" | "B" | string; // H: 행정동 / B: 법정동
+    region_1depth_name?: string; // 시/도
+    region_2depth_name?: string; // 구/군/시
+    region_3depth_name?: string; // 읍/면/동
   }>;
 };
 
-type GeoCoding = NonNullable<
-  NonNullable<
-    NonNullable<NominatimGeocodjson["features"]>[number]["properties"]
-  >["geocoding"]
->;
+/**
+ * 동일 좌표에 대해 행정동(H) 결과를 우선한다.
+ * 일부 지역은 법정동(B)만 오는 경우가 있어 fallback 한다.
+ */
+function pickPrimaryRegion(
+  documents: NonNullable<KakaoCoord2RegionResponse["documents"]>,
+) {
+  if (documents.length === 0) return null;
+  return (
+    documents.find((doc) => doc.region_type === "H") ??
+    documents.find((doc) => doc.region_type === "B") ??
+    documents[0] ??
+    null
+  );
+}
 
 /**
- * Nominatim 응답에서 구(區) 수준 장소 라벨을 추출한다.
- *
- * 우선순위:
- *   1. admin.level5 — 광역시 자치구 (마포구, 해운대구)
- *   2. county       — 동일 데이터를 다른 키로 제공하기도 함
- *   3. admin.level6 — 소규모 시/군 (완주군, 고흥군)
- *   4. city         — 도시명 (제주시, 천안시)
- *   5. admin.level4 — 시/도 (최후 수단)
+ * Kakao 응답에서 placeLabel(구/군/시 우선)을 추출한다.
  */
-function extractPlaceLabel(geocoding: GeoCoding): string | null {
+function extractPlaceLabel(region: {
+  region_1depth_name?: string;
+  region_2depth_name?: string;
+  region_3depth_name?: string;
+}): string | null {
   const candidates = [
-    geocoding.admin?.level5,
-    geocoding.county,
-    geocoding.admin?.level6,
-    geocoding.city,
-    geocoding.admin?.level4,
-    geocoding.state,
+    region.region_2depth_name,
+    region.region_3depth_name,
+    region.region_1depth_name,
   ];
 
   for (const candidate of candidates) {
@@ -83,12 +76,18 @@ export async function GET(request: Request) {
     return fail("좌표 범위를 확인해 주세요.", 400, "INVALID_LOCATION");
   }
 
-  const url = new URL(NOMINATIM_REVERSE_URL);
-  url.searchParams.set("format", "geocodejson");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("zoom", "12"); // 구(district) 수준
-  url.searchParams.set("lat", String(lat));
-  url.searchParams.set("lon", String(lng));
+  if (!KAKAO_REST_API_KEY) {
+    return fail(
+      "서버 설정에 카카오 REST API 키가 없어요.",
+      500,
+      "GEOCODE_NOT_CONFIGURED",
+    );
+  }
+
+  const url = new URL(KAKAO_COORD2REGION_URL);
+  url.searchParams.set("x", String(lng)); // 경도
+  url.searchParams.set("y", String(lat)); // 위도
+  url.searchParams.set("input_coord", "WGS84");
 
   const controller = new AbortController();
   const timeoutHandle = setTimeout(
@@ -99,27 +98,41 @@ export async function GET(request: Request) {
   try {
     const response = await fetch(url, {
       headers: {
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.6",
-        // Nominatim 이용 정책: 식별 가능한 User-Agent 필수
-        "User-Agent": "beenhere-mvp/1.0 (https://github.com/beenhere)",
+        Authorization: `KakaoAK ${KAKAO_REST_API_KEY}`,
       },
       signal: controller.signal,
       // Next.js 캐시: 동일 좌표 재요청 1시간 방지
       next: { revalidate: CACHE_REVALIDATE_SECONDS },
     });
 
-    if (!response.ok) {
-      throw new Error(`Nominatim error: ${response.status}`);
+    if (response.status === 401 || response.status === 403) {
+      return fail(
+        "역지오코딩 인증에 실패했어요. 서버 키 설정을 확인해 주세요.",
+        502,
+        "GEOCODE_AUTH_FAILED",
+      );
     }
 
-    const json = (await response.json()) as NominatimGeocodjson;
-    const geocoding = json.features?.[0]?.properties?.geocoding;
+    if (response.status === 429) {
+      return fail(
+        "위치 요청이 많아요. 잠시 후 다시 시도해 주세요.",
+        429,
+        "GEOCODE_RATE_LIMITED",
+      );
+    }
 
-    if (!geocoding) {
+    if (!response.ok) {
+      throw new Error(`Kakao Local API error: ${response.status}`);
+    }
+
+    const json = (await response.json()) as KakaoCoord2RegionResponse;
+    const primaryRegion = pickPrimaryRegion(json.documents ?? []);
+
+    if (!primaryRegion) {
       return fail("이 좌표의 지역 정보를 찾지 못했어요.", 422, "GEOCODE_FAILED");
     }
 
-    const placeLabel = extractPlaceLabel(geocoding);
+    const placeLabel = extractPlaceLabel(primaryRegion);
 
     if (!placeLabel) {
       return fail("이 좌표의 지역 정보를 찾지 못했어요.", 422, "GEOCODE_FAILED");
@@ -135,7 +148,7 @@ export async function GET(request: Request) {
       );
     }
 
-    console.error("[api/geo/reverse] Nominatim 요청 실패:", error);
+    console.error("[api/geo/reverse] Kakao Local API 요청 실패:", error);
     return fail(
       "지역 정보를 가져오는 중 오류가 발생했어요.",
       502,

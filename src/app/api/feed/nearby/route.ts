@@ -22,7 +22,15 @@ export async function GET(request: Request) {
     const result = await loadNearbyFeedRepository({ latitude, longitude, cursor, limit });
     return ok({ items: result.items, nextCursor: result.nextCursor });
   } catch (error) {
-    console.error("[api/feed/nearby] 피드 조회 실패:", error);
+    const detail =
+      error && typeof error === "object" && "message" in error
+        ? (error as { message: string; code?: string }).message
+        : String(error);
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: string }).code)
+        : "";
+    console.error("[api/feed/nearby] 피드 조회 실패:", detail, code || "", error);
     return fail("피드를 불러오는 중 오류가 발생했어요.", 500, "INTERNAL_ERROR");
   }
 }

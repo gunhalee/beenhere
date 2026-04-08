@@ -1,18 +1,38 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { FeedItem } from "@/types/domain";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
+import {
+  getCurrentBrowserCoordinates,
+  isGeoPermissionDenied,
+} from "@/lib/geo/browser-location";
+import {
+  getGeocodingErrorMessage,
+  resolvePlaceLabel,
+} from "@/lib/geo/reverse-geocode";
 import {
   likePostClient,
   deletePostClient,
   reportPostClient,
 } from "@/lib/api/feed-client";
 
-type Actions = {
-  updateItem: (postId: string, patch: Partial<FeedItem>) => void;
+export type LikeablePostItem = {
+  postId: string;
+  likeCount: number;
+  myLike: boolean;
+  placeLabel?: string | null;
+};
+
+type Actions<TItem extends LikeablePostItem> = {
+  updateItem: (postId: string, patch: Partial<TItem>) => void;
   removeItem: (postId: string) => void;
-  coordsRef: React.RefObject<Coordinates | null>;
+  coordsRef: RefObject<Coordinates | null>;
+  onLocationError?: (message: string) => void;
 };
 
 export type ReportState = {
@@ -22,12 +42,19 @@ export type ReportState = {
   successMessage: string | null;
 };
 
-// ---------------------------
-// 훅
-// ---------------------------
-
-export function usePostActions({ updateItem, removeItem, coordsRef }: Actions) {
+export function usePostActions<TItem extends LikeablePostItem>({
+  updateItem,
+  removeItem,
+  coordsRef,
+  onLocationError,
+}: Actions<TItem>) {
   const likePendingRef = useRef<Set<string>>(new Set());
+  const placeLabelCacheRef = useRef<{
+    latitude: number;
+    longitude: number;
+    placeLabel: string;
+  } | null>(null);
+
   const [reportState, setReportState] = useState<ReportState>({
     postId: null,
     submitting: false,
@@ -35,64 +62,99 @@ export function usePostActions({ updateItem, removeItem, coordsRef }: Actions) {
     successMessage: null,
   });
 
-  // ---------------------------
-  // 라이크 (캐시된 좌표 사용)
-  // ---------------------------
+  const resolveCoordinates = useCallback(async (): Promise<Coordinates | null> => {
+    if (coordsRef.current) return coordsRef.current;
+
+    try {
+      const coords = await getCurrentBrowserCoordinates();
+      coordsRef.current = coords;
+      return coords;
+    } catch (error) {
+      const message = isGeoPermissionDenied(error)
+        ? "위치 권한을 허용해야 라이크를 남길 수 있어요."
+        : "현재 위치를 확인하지 못했어요. 다시 시도해 주세요.";
+      onLocationError?.(message);
+      return null;
+    }
+  }, [coordsRef, onLocationError]);
+
+  const resolveLikePlaceLabel = useCallback(
+    async (coords: Coordinates, fallbackLabel?: string | null) => {
+      const cache = placeLabelCacheRef.current;
+      if (
+        cache &&
+        cache.latitude === coords.latitude &&
+        cache.longitude === coords.longitude
+      ) {
+        return cache.placeLabel;
+      }
+
+      try {
+        const placeLabel = await resolvePlaceLabel(coords);
+        placeLabelCacheRef.current = {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          placeLabel,
+        };
+        return placeLabel;
+      } catch (error) {
+        onLocationError?.(getGeocodingErrorMessage(error));
+        return fallbackLabel?.trim() || "현재 위치";
+      }
+    },
+    [onLocationError],
+  );
+
   const handleLike = useCallback(
-    async (item: FeedItem) => {
+    async (item: TItem) => {
       if (item.myLike) return;
       if (likePendingRef.current.has(item.postId)) return;
 
-      const coords = coordsRef.current;
+      const coords = await resolveCoordinates();
       if (!coords) return;
 
+      const placeLabel = await resolveLikePlaceLabel(coords, item.placeLabel);
       likePendingRef.current.add(item.postId);
 
-      // 낙관적 업데이트
       updateItem(item.postId, {
         myLike: true,
         likeCount: item.likeCount + 1,
-      });
+      } as Partial<TItem>);
 
       const result = await likePostClient(item.postId, {
         latitude: coords.latitude,
         longitude: coords.longitude,
-        placeLabel: item.placeLabel,
+        placeLabel,
       });
 
       likePendingRef.current.delete(item.postId);
 
       if (!result.ok) {
-        // 낙관적 업데이트 롤백
         updateItem(item.postId, {
           myLike: false,
           likeCount: item.likeCount,
-        });
-      } else {
-        updateItem(item.postId, { likeCount: result.data.likeCount });
+        } as Partial<TItem>);
+        return;
       }
+
+      updateItem(item.postId, {
+        likeCount: result.data.likeCount,
+      } as Partial<TItem>);
     },
-    [coordsRef, updateItem],
+    [resolveCoordinates, resolveLikePlaceLabel, updateItem],
   );
 
-  // ---------------------------
-  // 삭제
-  // ---------------------------
   const handleDelete = useCallback(
     async (postId: string) => {
       removeItem(postId);
       const result = await deletePostClient(postId);
       if (!result.ok) {
-        // 삭제 실패 — 실제 서비스에서는 아이템 복원이 필요하지만 MVP에서는 새로고침 유도
-        console.error("[usePostActions] 삭제 실패:", result.error);
+        console.error("[usePostActions] post delete failed:", result.error);
       }
     },
     [removeItem],
   );
 
-  // ---------------------------
-  // 신고 다이얼로그 제어
-  // ---------------------------
   const openReport = useCallback((postId: string) => {
     setReportState({
       postId,
@@ -106,35 +168,37 @@ export function usePostActions({ updateItem, removeItem, coordsRef }: Actions) {
     setReportState((s) => ({ ...s, postId: null }));
   }, []);
 
-  const handleReport = useCallback(async (reasonCode: string) => {
-    setReportState((s) => {
-      if (!s.postId) return s;
-      return { ...s, submitting: true, errorMessage: null };
-    });
+  const handleReport = useCallback(
+    async (reasonCode: string) => {
+      if (!reportState.postId || reportState.submitting) return;
 
-    setReportState((prev) => {
-      if (!prev.postId) return prev;
-      const postId = prev.postId;
+      const postId = reportState.postId;
+      setReportState((s) => ({
+        ...s,
+        submitting: true,
+        errorMessage: null,
+        successMessage: null,
+      }));
 
-      reportPostClient(postId, reasonCode).then((result) => {
-        if (!result.ok) {
-          setReportState((s) => ({
-            ...s,
-            submitting: false,
-            errorMessage: "신고를 처리하지 못했어요. 다시 시도해 주세요.",
-          }));
-        } else {
-          setReportState((s) => ({
-            ...s,
-            submitting: false,
-            successMessage: "신고가 접수됐어요. 검토 후 조치할게요.",
-          }));
-        }
-      });
+      const result = await reportPostClient(postId, reasonCode);
 
-      return prev;
-    });
-  }, []);
+      if (!result.ok) {
+        setReportState((s) => ({
+          ...s,
+          submitting: false,
+          errorMessage: "신고를 처리하지 못했어요. 다시 시도해 주세요.",
+        }));
+        return;
+      }
+
+      setReportState((s) => ({
+        ...s,
+        submitting: false,
+        successMessage: "신고가 접수되었어요. 검토 후 조치할게요.",
+      }));
+    },
+    [reportState.postId, reportState.submitting],
+  );
 
   return {
     reportState,

@@ -2,7 +2,7 @@
  * 클라이언트 사이드 역지오코딩 유틸리티.
  *
  * GPS 좌표를 구(區) 수준 장소 라벨로 변환한다.
- * 실제 Nominatim 호출은 /api/geo/reverse 서버 라우트가 처리한다.
+ * 실제 Kakao Local API 호출은 /api/geo/reverse 서버 라우트가 처리한다.
  *
  * 사용 예:
  *   const coords = await getCurrentBrowserCoordinates();
@@ -61,6 +61,12 @@ export function getGeocodingErrorMessage(error: unknown): string {
       return "위치 확인 시간이 초과됐어요. 다시 시도해 주세요.";
     case "GEOCODE_FAILED":
       return "이 위치의 지역 정보를 찾지 못했어요.";
+    case "GEOCODE_NOT_CONFIGURED":
+      return "위치 서비스 설정이 아직 완료되지 않았어요.";
+    case "GEOCODE_AUTH_FAILED":
+      return "위치 서비스 인증에 실패했어요. 잠시 후 다시 시도해 주세요.";
+    case "GEOCODE_RATE_LIMITED":
+      return "위치 요청이 많아요. 잠시 후 다시 시도해 주세요.";
     case "TIMEOUT":
       return "요청 시간이 초과됐어요. 다시 시도해 주세요.";
     case "NETWORK_ERROR":

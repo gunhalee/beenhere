@@ -1,6 +1,7 @@
 import type { ProfilePostRow, ProfileLikeRow, PostLikerRow } from "@/types/db";
 import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { encodeCursor, decodeCursor } from "@/lib/utils/cursor";
 import {
@@ -36,7 +37,7 @@ export async function getProfileRepository(
 
   return {
     id: data.id as string,
-    nickname: data.nickname as string,
+    nickname: formatNicknameForDisplay(data.nickname as string),
     createdAt: data.created_at as string,
   };
 }
@@ -60,7 +61,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 
   return {
     id: data.id as string,
-    nickname: data.nickname as string,
+    nickname: formatNicknameForDisplay(data.nickname as string),
     nicknameChangedAt: (data.nickname_changed_at as string | null) ?? null,
     createdAt: data.created_at as string,
   };
@@ -109,12 +110,12 @@ export async function regenerateNicknameRepository(
         .update({ nickname: retry, nickname_changed_at: new Date().toISOString() })
         .eq("id", userId);
       if (retryError) throw retryError;
-      return { ok: true, nickname: retry };
+      return { ok: true, nickname: formatNicknameForDisplay(retry) };
     }
     throw error;
   }
 
-  return { ok: true, nickname: newNickname };
+  return { ok: true, nickname: formatNicknameForDisplay(newNickname) };
 }
 
 // ---------------------------
@@ -198,7 +199,7 @@ export async function getProfileLikesRepository(input: {
     postId: String(row.post_id),
     content: row.content,
     authorId: String(row.author_id),
-    authorNickname: row.author_nickname,
+    authorNickname: formatNicknameForDisplay(row.author_nickname),
     placeLabel: row.place_label,
     relativeTime: formatRelativeTime(row.last_activity_at),
     likeCount: Number(row.like_count),
@@ -247,7 +248,7 @@ export async function getPostLikersRepository(input: {
 
   const items: PostLikerItem[] = selectedRows.map((row) => ({
     userId: String(row.user_id),
-    nickname: row.nickname,
+    nickname: formatNicknameForDisplay(row.nickname),
     likedAt: row.liked_at,
     likedAtRelative: formatRelativeTime(row.liked_at),
     likePlaceLabel: row.like_place_label,

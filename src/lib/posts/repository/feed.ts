@@ -1,5 +1,6 @@
 import type { FeedItem } from "@/types/domain";
 import type { NearbyFeedRow } from "@/types/db";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatRelativeTime } from "@/lib/utils/datetime";
@@ -19,9 +20,9 @@ function rowToFeedItem(row: NearbyFeedRow): FeedItem {
     postId: String(row.post_id),
     content: row.content,
     authorId: String(row.author_id),
-    authorNickname: row.author_nickname,
+    authorNickname: formatNicknameForDisplay(row.author_nickname),
     lastSharerId: String(row.last_sharer_id),
-    lastSharerNickname: row.last_sharer_nickname,
+    lastSharerNickname: formatNicknameForDisplay(row.last_sharer_nickname),
     placeLabel: row.place_label,
     distanceMeters: Number(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),

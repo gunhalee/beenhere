@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { generateNicknameCandidates } from "@/lib/nickname/generate";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { fetchApi } from "@/lib/api/client";
 
 export default function OnboardingPage() {
@@ -136,7 +137,7 @@ export default function OnboardingPage() {
                   width: "100%",
                 }}
               >
-                <span>{nick}</span>
+                <span>{formatNicknameForDisplay(nick)}</span>
                 {isSelected ? (
                   <span style={{ fontSize: "18px" }}>✓</span>
                 ) : null}

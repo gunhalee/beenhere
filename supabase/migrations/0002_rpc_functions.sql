@@ -254,27 +254,38 @@ BEGIN
     JOIN profiles sharer_pr ON sharer_pr.id = cpp.closest_sharer_id
     LEFT JOIN post_like_counts lc ON lc.post_id = cpp.post_id
   )
-  SELECT *
-  FROM feed_rows
+  -- RETURNS TABLE 컬럼명과 동일한 미한정 식별자(post_id 등)는 PL/pgSQL 출력 변수와 충돌하므로
+  -- 반드시 서브쿼리/CTE 별칭으로 한정한다 (42702 ambiguous).
+  SELECT fr.post_id,
+    fr.content,
+    fr.author_id,
+    fr.author_nickname,
+    fr.last_sharer_id,
+    fr.last_sharer_nickname,
+    fr.place_label,
+    fr.distance_meters,
+    fr.last_activity_at,
+    fr.like_count,
+    fr.my_like
+  FROM feed_rows fr
   WHERE
-    -- 커서 조건 (커서가 없으면 처음부터)
     cursor_distance_meters IS NULL
     OR (
-      distance_meters > cursor_distance_meters
+      fr.distance_meters > cursor_distance_meters
       OR (
-        distance_meters = cursor_distance_meters
-        AND last_activity_at < cursor_last_activity_at
+        fr.distance_meters = cursor_distance_meters
+        AND fr.last_activity_at < cursor_last_activity_at
       )
       OR (
-        distance_meters     = cursor_distance_meters
-        AND last_activity_at = cursor_last_activity_at
-        AND post_id         > cursor_post_id
+        fr.distance_meters = cursor_distance_meters
+        AND fr.last_activity_at = cursor_last_activity_at
+        AND fr.post_id > cursor_post_id
       )
     )
   ORDER BY
-    distance_meters   ASC,
-    last_activity_at  DESC,
-    post_id           ASC
+    fr.distance_meters ASC,
+    fr.last_activity_at DESC,
+    fr.post_id ASC
   LIMIT result_limit;
 END;
 $$;
