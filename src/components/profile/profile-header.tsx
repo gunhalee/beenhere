@@ -1,0 +1,250 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { regenNicknameClient } from "@/lib/api/profile-client";
+
+const COOLDOWN_DAYS = 7;
+
+type Props = {
+  nickname: string;
+  isMyProfile: boolean;
+  nicknameChangedAt?: string | null;
+  onBlockClick?: () => void;
+  onNicknameChange?: (newNickname: string) => void;
+};
+
+export function ProfileHeader({
+  nickname,
+  isMyProfile,
+  nicknameChangedAt,
+  onBlockClick,
+  onNicknameChange,
+}: Props) {
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+
+  const canRegen = !nicknameChangedAt
+    ? true
+    : Date.now() - new Date(nicknameChangedAt).getTime() >
+      COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+
+  async function handleRegenNickname() {
+    if (regenLoading) return;
+    setRegenLoading(true);
+    setRegenError(null);
+
+    const result = await regenNicknameClient();
+
+    setRegenLoading(false);
+
+    if (!result.ok) {
+      setRegenError(result.error ?? "닉네임을 변경하지 못했어요.");
+      return;
+    }
+
+    onNicknameChange?.(result.data.nickname);
+  }
+
+  return (
+    <header
+      style={{
+        backdropFilter: "blur(10px)",
+        background: "rgba(255, 255, 255, 0.95)",
+        borderBottom: "1px solid rgba(17, 24, 39, 0.06)",
+        padding:
+          "calc(env(safe-area-inset-top, 0px) + 14px) 20px 14px",
+        position: "sticky",
+        top: 0,
+        zIndex: 4,
+      }}
+    >
+      <div
+        style={{
+          alignItems: "center",
+          display: "flex",
+          gap: "12px",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* 뒤로 가기 */}
+        <button
+          aria-label="뒤로"
+          onClick={() => router.back()}
+          type="button"
+          style={{
+            appearance: "none",
+            background: "none",
+            border: "none",
+            color: "#374151",
+            cursor: "pointer",
+            fontSize: "20px",
+            flexShrink: 0,
+            lineHeight: 1,
+            padding: "4px",
+          }}
+        >
+          ←
+        </button>
+
+        {/* 닉네임 */}
+        <h1
+          style={{
+            color: "#111827",
+            flex: 1,
+            fontSize: "16px",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {nickname}
+        </h1>
+
+        {/* 메뉴 버튼 */}
+        <div style={{ position: "relative" }}>
+          <button
+            aria-label="메뉴"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            type="button"
+            style={{
+              appearance: "none",
+              background: "none",
+              border: "none",
+              color: "#6b7280",
+              cursor: "pointer",
+              fontSize: "20px",
+              lineHeight: 1,
+              padding: "4px",
+            }}
+          >
+            ⋯
+          </button>
+
+          {menuOpen ? (
+            <>
+              <button
+                aria-label="메뉴 닫기"
+                onClick={() => setMenuOpen(false)}
+                type="button"
+                style={{
+                  appearance: "none",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "default",
+                  inset: 0,
+                  padding: 0,
+                  position: "fixed",
+                  zIndex: 10,
+                }}
+              />
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "12px",
+                  boxShadow: "0 8px 24px rgba(17, 24, 39, 0.12)",
+                  minWidth: "160px",
+                  overflow: "hidden",
+                  position: "absolute",
+                  right: 0,
+                  top: "36px",
+                  zIndex: 11,
+                }}
+              >
+                {isMyProfile ? (
+                  <>
+                    <button
+                      disabled={!canRegen || regenLoading}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        handleRegenNickname();
+                      }}
+                      type="button"
+                      style={{
+                        appearance: "none",
+                        background: "none",
+                        border: "none",
+                        borderBottom: "1px solid #f3f4f6",
+                        color:
+                          canRegen && !regenLoading ? "#111827" : "#9ca3af",
+                        cursor:
+                          canRegen && !regenLoading ? "pointer" : "default",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        padding: "12px 16px",
+                        textAlign: "left",
+                        width: "100%",
+                      }}
+                    >
+                      {regenLoading
+                        ? "변경 중…"
+                        : canRegen
+                          ? "닉네임 재생성"
+                          : `닉네임 재생성 (${COOLDOWN_DAYS}일 후 가능)`}
+                    </button>
+                    <Link
+                      href="/auth/logout"
+                      style={{
+                        color: "#ef4444",
+                        display: "block",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        padding: "12px 16px",
+                        textDecoration: "none",
+                      }}
+                    >
+                      로그아웃
+                    </Link>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onBlockClick?.();
+                    }}
+                    type="button"
+                    style={{
+                      appearance: "none",
+                      background: "none",
+                      border: "none",
+                      color: "#ef4444",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      padding: "12px 16px",
+                      textAlign: "left",
+                      width: "100%",
+                    }}
+                  >
+                    차단하기
+                  </button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {regenError ? (
+        <p
+          style={{
+            color: "#ef4444",
+            fontSize: "12px",
+            margin: "8px 0 0",
+            textAlign: "center",
+          }}
+        >
+          {regenError}
+        </p>
+      ) : null}
+    </header>
+  );
+}
