@@ -66,9 +66,10 @@ export function AccountChoiceDialog({
             fontWeight: 800,
             letterSpacing: "-0.02em",
             margin: "0 0 10px",
+            textAlign: "center",
           }}
         >
-          계속하려면 계정이 필요해요
+          로그인하시겠습니까?
         </h2>
         <p
           style={{
@@ -78,9 +79,9 @@ export function AccountChoiceDialog({
             margin: "0 0 18px",
           }}
         >
-          이 작업은 계정이 필요해요.
+          Google 계정으로 남기거나 저장한 글은 두고두고 꺼내볼 수 있어요.
           <br />
-          게스트로 계속하거나 Google로 가입할 수 있어요.
+          게스트 계정으로도 글 작성, 저장에는 아무런 문제가 없답니다.
         </p>
 
         {errorMessage ? (
@@ -135,7 +136,7 @@ export function AccountChoiceDialog({
               textAlign: "center",
             }}
           >
-            {googleLoading ? "Google로 이동 중..." : "Google로 가입"}
+            {googleLoading ? "Google로 이동 중..." : "Google로 계속"}
           </button>
 
           <button
