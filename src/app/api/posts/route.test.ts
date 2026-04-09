@@ -3,6 +3,8 @@ import { POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createPost } from "@/lib/posts/mutations";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 
 vi.mock("@/lib/supabase/config", () => ({
   hasSupabaseBrowserConfig: vi.fn(),
@@ -14,6 +16,14 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/posts/mutations", () => ({
   createPost: vi.fn(),
+}));
+
+vi.mock("@/lib/profiles/ensure-profile", () => ({
+  ensureProfileExistsForUser: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/anonymous-write-quota", () => ({
+  consumeAnonymousWriteQuota: vi.fn(),
 }));
 
 function makeJsonRequest(body: unknown) {
@@ -28,6 +38,15 @@ describe("POST /api/posts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(false);
+    vi.mocked(ensureProfileExistsForUser).mockResolvedValue({
+      created: false,
+      nickname: "Guest",
+    });
+    vi.mocked(consumeAnonymousWriteQuota).mockResolvedValue({
+      allowed: true,
+      remaining: 999,
+      resetAt: null,
+    });
   });
 
   it("returns 400 for invalid clientRequestId format", async () => {
@@ -104,4 +123,3 @@ describe("POST /api/posts", () => {
     expect(createPost).not.toHaveBeenCalled();
   });
 });
-

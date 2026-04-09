@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
@@ -12,7 +12,10 @@ import {
 import { useFeed } from "@/lib/hooks/use-feed";
 import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
+import { ensureGuestSession } from "@/lib/auth/guest-session";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 import type { FeedItem } from "@/types/domain";
+import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
 import { FeedHeader } from "./feed-header";
 import { FeedList } from "./feed-list";
 import { FeedLocationBanner } from "./feed-location-banner";
@@ -40,12 +43,21 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [resolvedCurrentNickname, setResolvedCurrentNickname] = useState<string | null>(
     currentNickname ?? null,
   );
+  const [resolvedHasProfile, setResolvedHasProfile] = useState(
+    Boolean(currentUserId && currentNickname),
+  );
   const [composeState, setComposeState] = useState<ComposeState>({ open: false });
   const [composeLocating, setComposeLocating] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
   const [postActionError, setPostActionError] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
+  const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
+  const [guestAuthLoading, setGuestAuthLoading] = useState(false);
+  const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
+  const [resumeComposeAfterAuth, setResumeComposeAfterAuth] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
@@ -64,6 +76,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     requestLocation,
   } = useFeed();
 
+  const openAccountChoice = useCallback((options?: { resumeCompose?: boolean }) => {
+    setAccountChoiceError(null);
+    setAccountChoiceOpen(true);
+    setResumeComposeAfterAuth(options?.resumeCompose ?? false);
+  }, []);
+
   const {
     reportState,
     handleLike,
@@ -78,6 +96,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     coordsRef,
     onLocationError: setPostActionError,
     onActionError: setPostActionError,
+    onAuthRequired: () => {
+      openAccountChoice();
+    },
+    onWriteSettled: () => {
+      setResolvedHasProfile(true);
+    },
   });
 
   const locationAvailable = !state.locationDenied;
@@ -100,27 +124,24 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
           setResolvedCurrentUserId(null);
           setResolvedCurrentNickname(null);
+          setResolvedHasProfile(false);
         }
         return;
       }
 
       setResolvedCurrentUserId(result.data.id);
       setResolvedCurrentNickname(result.data.nickname);
+      setResolvedHasProfile(result.data.profileCreated ?? true);
     }
 
     void resolveCurrentProfile();
   }, [mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
 
-  async function handleComposeClick() {
+  const openComposeSheet = useCallback(async () => {
     if (composeLocating) return;
 
     setComposeError(null);
     setPostActionError(null);
-
-    if (!resolvedCurrentUserId) {
-      window.location.href = "/auth/login";
-      return;
-    }
 
     if (coordsRef.current) {
       setComposeState({ open: true, coords: coordsRef.current });
@@ -145,7 +166,76 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     } finally {
       setComposeLocating(false);
     }
+  }, [composeLocating, coordsRef]);
+
+  async function handleComposeClick() {
+    if (!resolvedCurrentUserId) {
+      openAccountChoice({ resumeCompose: true });
+      return;
+    }
+
+    await openComposeSheet();
   }
+
+  const handleGuestContinue = useCallback(async () => {
+    if (guestAuthLoading || googleAuthLoading) return;
+
+    setGuestAuthLoading(true);
+    setAccountChoiceError(null);
+
+    const sessionResult = await ensureGuestSession();
+    if (!sessionResult.ok) {
+      if (mountedRef.current) {
+        setGuestAuthLoading(false);
+        setAccountChoiceError(sessionResult.error);
+      }
+      return;
+    }
+
+    const profileResult = await fetchMyProfileClient({ force: true });
+    if (!mountedRef.current) return;
+
+    if (profileResult.ok) {
+      setResolvedCurrentUserId(profileResult.data.id);
+      setResolvedCurrentNickname(profileResult.data.nickname);
+      setResolvedHasProfile(profileResult.data.profileCreated ?? true);
+    } else {
+      // Fallback for transient profile-read failures right after session bootstrap.
+      setResolvedCurrentUserId(sessionResult.userId);
+      setResolvedCurrentNickname("Guest");
+      setResolvedHasProfile(false);
+    }
+
+    setGuestAuthLoading(false);
+    setAccountChoiceOpen(false);
+  }, [googleAuthLoading, guestAuthLoading, mountedRef]);
+
+  const handleGoogleContinue = useCallback(async () => {
+    if (guestAuthLoading || googleAuthLoading) return;
+
+    setGoogleAuthLoading(true);
+    setAccountChoiceError(null);
+
+    const nextPath = `${window.location.pathname}${window.location.search}`;
+    const result = await startGoogleOAuth({
+      intent: "login",
+      nextPath,
+    });
+
+    if (!result.ok && mountedRef.current) {
+      setGoogleAuthLoading(false);
+      setAccountChoiceError(result.error ?? "Could not start Google signup.");
+    }
+  }, [googleAuthLoading, guestAuthLoading, mountedRef]);
+
+  useEffect(() => {
+    if (!resumeComposeAfterAuth) return;
+    if (accountChoiceOpen) return;
+    if (!resolvedCurrentUserId) return;
+
+    setResumeComposeAfterAuth(false);
+    void openComposeSheet();
+  }, [accountChoiceOpen, openComposeSheet, resolvedCurrentUserId, resumeComposeAfterAuth]);
 
   function handleDismissCompose() {
     setComposeState({ open: false });
@@ -154,6 +244,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   function handleComposeSuccess(newItem: FeedItem) {
     setComposeState({ open: false });
     prependItem(newItem);
+    setResolvedHasProfile(true);
   }
 
   const handleLikeClick = useCallback(
@@ -265,8 +356,9 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     >
       <FeedHeader
         placeLabel={firstPlaceLabel}
-        currentUserId={resolvedCurrentUserId}
+        currentUserId={resolvedHasProfile ? resolvedCurrentUserId : null}
         currentNickname={resolvedCurrentNickname}
+        isAuthenticated={Boolean(resolvedCurrentUserId)}
       />
 
       {state.locationDenied ? (
@@ -343,10 +435,10 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
           }}
         >
           {pullRefreshing
-            ? "새로고침 중..."
+            ? "Refreshing..."
             : pullReady
-              ? "놓으면 새로고침"
-              : "당겨서 새로고침"}
+              ? "Release to refresh"
+              : "Pull to refresh"}
         </div>
 
         <FeedList
@@ -381,6 +473,25 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
           onDismiss={handleDismissCompose}
         />
       ) : null}
+
+      <AccountChoiceDialog
+        open={accountChoiceOpen}
+        guestLoading={guestAuthLoading}
+        googleLoading={googleAuthLoading}
+        errorMessage={accountChoiceError}
+        onGuestContinue={() => {
+          void handleGuestContinue();
+        }}
+        onGoogleContinue={() => {
+          void handleGoogleContinue();
+        }}
+        onClose={() => {
+          if (guestAuthLoading || googleAuthLoading) return;
+          setAccountChoiceOpen(false);
+          setResumeComposeAfterAuth(false);
+        }}
+      />
     </div>
   );
 }
+

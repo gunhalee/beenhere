@@ -1,9 +1,11 @@
-import { readJsonBody } from "@/lib/api/request";
+﻿import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createPost } from "@/lib/posts/mutations";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 import type { CreatePostBody } from "@/types/api";
 
 function isFiniteNumber(value: unknown): value is number {
@@ -21,15 +23,15 @@ export async function POST(request: Request) {
   const clientRequestId = bodyResult.body.clientRequestId?.trim() || undefined;
 
   if (!content?.trim()) {
-    return fail("내용을 입력해 주세요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+    return fail("Content is required.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
   if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
-    return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
+    return fail("Valid location coordinates are required.", 400, API_ERROR_CODE.INVALID_LOCATION);
   }
 
   if (!placeLabel?.trim()) {
-    return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+    return fail("Place label is required.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
   if (clientRequestId && !CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
@@ -53,6 +55,26 @@ export async function POST(request: Request) {
         API_ERROR_CODE.UNAUTHORIZED,
       );
     }
+
+    await ensureProfileExistsForUser(supabase, user.id);
+
+    const quota = await consumeAnonymousWriteQuota({
+      supabase,
+      userId: user.id,
+      isAnonymous: Boolean(user.is_anonymous),
+    });
+
+    if (!quota.allowed) {
+      return fail(
+        "Too many write actions for this guest account. Please try again shortly.",
+        429,
+        API_ERROR_CODE.RATE_LIMITED,
+        {
+          resetAt: quota.resetAt,
+          remaining: quota.remaining,
+        },
+      );
+    }
   }
 
   try {
@@ -70,11 +92,12 @@ export async function POST(request: Request) {
 
     return ok({ postId: result.postId }, 201);
   } catch (error) {
-    console.error("[api/posts] 글 작성 실패:", error);
+    console.error("[api/posts] create post failed:", error);
     return fail(
-      "글을 작성하는 중 오류가 발생했어요.",
+      "Failed to create post.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );
   }
 }
+

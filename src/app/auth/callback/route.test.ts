@@ -87,7 +87,7 @@ describe("GET /auth/callback", () => {
     );
   });
 
-  it("redirects to onboarding on login callback when profile does not exist", async () => {
+  it("redirects to next path on login callback even when profile does not exist", async () => {
     mockCallbackSupabase({
       userId: "user-1",
       profileExists: false,
@@ -99,7 +99,7 @@ describe("GET /auth/callback", () => {
     const location = response.headers.get("location");
 
     expect(response.status).toBe(307);
-    expect(location).toBe("http://localhost/onboarding");
+    expect(location).toBe("http://localhost/");
   });
 
   it("redirects to profile with success status when google link callback succeeds", async () => {

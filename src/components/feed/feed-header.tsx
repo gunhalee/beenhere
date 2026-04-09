@@ -4,9 +4,15 @@ type Props = {
   placeLabel?: string | null;
   currentUserId?: string | null;
   currentNickname?: string | null;
+  isAuthenticated?: boolean;
 };
 
-export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props) {
+export function FeedHeader({
+  placeLabel,
+  currentUserId,
+  currentNickname,
+  isAuthenticated = false,
+}: Props) {
   return (
     <header
       style={{
@@ -94,6 +100,35 @@ export function FeedHeader({ placeLabel, currentUserId, currentNickname }: Props
               {currentNickname ?? "프로필"}
             </span>
           </Link>
+        ) : isAuthenticated ? (
+          <span
+            style={{
+              alignItems: "center",
+              background: "#f3f4f6",
+              border: "1px solid #e5e7eb",
+              borderRadius: "9999px",
+              color: "#374151",
+              display: "flex",
+              flexShrink: 0,
+              fontSize: "12px",
+              fontWeight: 600,
+              maxWidth: "120px",
+              overflow: "hidden",
+              padding: "5px 10px",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {currentNickname ?? "Guest"}
+            </span>
+          </span>
         ) : (
           <Link
             href="/auth/login"

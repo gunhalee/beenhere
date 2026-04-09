@@ -603,3 +603,34 @@ CI:
 - Notes:
   - Playwright run showed Next.js dev warning about cross-origin dev origin for `127.0.0.1`; this is non-blocking for current behavior.
   - If this warning needs to be eliminated in local-dev CI parity, configure `allowedDevOrigins` in `next.config.*`.
+
+## 33) Device-Guest Account Bootstrap + Linking UX Policy (2026-04-09)
+
+- Account entry policy:
+  - write-required actions now open a chooser: `Continue as Guest` or `Sign up with Google`.
+  - login page also offers both entry paths.
+- Guest bootstrap:
+  - client keeps a stable `device_id` in local storage.
+  - guest restore order: `refreshSession(stored_guest_refresh_token)` first, then `signInAnonymously` fallback.
+  - guest metadata includes `device_id`.
+- Logout behavior:
+  - logout route now uses `signOut({ scope: "local" })` and redirects to `/` (read-only home), not forced login.
+- First-write profile creation:
+  - write routes auto-call profile ensure helper before domain mutations:
+    - `/api/posts`
+    - `/api/posts/:postId/like`
+    - `/api/posts/:postId/report`
+    - `/api/blocks` and `/api/blocks/:userId`
+  - this removes dependency on onboarding profile creation for write capability.
+- Profile-read compatibility before first write:
+  - `GET /api/profiles/me` returns viewer context with `profileCreated` flag.
+  - if authenticated but no `profiles` row, payload still returns `id/nickname` fallback (`Guest`) with `profileCreated=false`.
+  - `GET /api/profiles/:userId` allows same fallback only when `userId === auth.uid()`.
+- OAuth callback policy update:
+  - login callback no longer redirects to `/onboarding` when profile row is missing; redirects to `next` path.
+  - link-google callback remains status-query based (`google_link=*`).
+- Link conflict UX:
+  - when `google_link_reason=identity_already_exists`, profile screen shows “switch to that Google account” CTA and explicit no-merge notice.
+- Anonymous write traffic relief:
+  - added migration `0014_anonymous_write_quota.sql` with RPC `consume_anonymous_write_quota`.
+  - anonymous-only per-account write quota enforced in write routes (429 on quota exhaustion).

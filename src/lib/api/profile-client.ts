@@ -22,6 +22,7 @@ type MyProfileData = {
   id: string;
   nickname: string;
   nicknameChangedAt: string | null;
+  profileCreated?: boolean;
   isAnonymous?: boolean;
   googleLinked?: boolean;
   canLinkGoogle?: boolean;

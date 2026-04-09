@@ -1,21 +1,16 @@
-"use client";
+﻿"use client";
 
-import {
-  useCallback,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import { resolveCoordinatesWithRef } from "@/lib/geo/resolve-coordinates";
-import {
-  getGeocodingErrorMessage,
-} from "@/lib/geo/reverse-geocode";
+import { getGeocodingErrorMessage } from "@/lib/geo/reverse-geocode";
 import { resolvePlaceLabelWithCache } from "@/lib/geo/place-label-cache";
 import {
   likePostClient,
   deletePostClient,
   reportPostClient,
 } from "@/lib/api/feed-client";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import type { RemovedItemSnapshot } from "./optimistic-removal";
 
 export type { RemovedItemSnapshot } from "./optimistic-removal";
@@ -34,6 +29,8 @@ type Actions<TItem extends LikeablePostItem, TRemovedItem> = {
   coordsRef: { current: Coordinates | null };
   onLocationError?: (message: string) => void;
   onActionError?: (message: string) => void;
+  onAuthRequired?: () => void;
+  onWriteSettled?: () => void;
 };
 
 export type ReportState = {
@@ -53,6 +50,8 @@ export function usePostActions<
   coordsRef,
   onLocationError,
   onActionError,
+  onAuthRequired,
+  onWriteSettled,
 }: Actions<TItem, TRemovedItem>) {
   const likePendingRef = useRef<Set<string>>(new Set());
   const deletePendingRef = useRef<Set<string>>(new Set());
@@ -85,7 +84,7 @@ export function usePostActions<
         return await resolvePlaceLabelWithCache(coords);
       } catch (error) {
         onLocationError?.(getGeocodingErrorMessage(error));
-        return fallbackLabel?.trim() || "현재 위치";
+        return fallbackLabel?.trim() || "Current location";
       }
     },
     [onLocationError],
@@ -124,15 +123,30 @@ export function usePostActions<
           myLike: false,
           likeCount: item.likeCount,
         } as Partial<TItem>);
-        onActionError?.(result.error ?? "라이크를 처리하지 못했어요. 다시 시도해 주세요.");
+
+        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+          onAuthRequired?.();
+          return;
+        }
+
+        onWriteSettled?.();
+        onActionError?.(result.error ?? "Could not complete like. Please try again.");
         return;
       }
 
+      onWriteSettled?.();
       updateItem(item.postId, {
         likeCount: result.data.likeCount,
       } as Partial<TItem>);
     },
-    [onActionError, resolveCoordinates, resolveLikePlaceLabel, updateItem],
+    [
+      onActionError,
+      onAuthRequired,
+      onWriteSettled,
+      resolveCoordinates,
+      resolveLikePlaceLabel,
+      updateItem,
+    ],
   );
 
   const handleDelete = useCallback(
@@ -147,11 +161,26 @@ export function usePostActions<
       deletePendingRef.current.delete(postId);
       if (!result.ok) {
         restoreRemovedItem(snapshot);
-        onActionError?.(result.error ?? "삭제를 완료하지 못했어요. 다시 시도해 주세요.");
+
+        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+          onAuthRequired?.();
+          return;
+        }
+
+        onWriteSettled?.();
+        onActionError?.(result.error ?? "Could not delete post. Please try again.");
         console.error("[usePostActions] post delete failed:", result.error);
+        return;
       }
+      onWriteSettled?.();
     },
-    [onActionError, removeItemOptimistic, restoreRemovedItem],
+    [
+      onActionError,
+      onAuthRequired,
+      onWriteSettled,
+      removeItemOptimistic,
+      restoreRemovedItem,
+    ],
   );
 
   const openReport = useCallback((postId: string) => {
@@ -182,21 +211,33 @@ export function usePostActions<
       const result = await reportPostClient(postId, reasonCode);
 
       if (!result.ok) {
+        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+          setReportState((s) => ({
+            ...s,
+            submitting: false,
+            errorMessage: null,
+          }));
+          onAuthRequired?.();
+          return;
+        }
+
         setReportState((s) => ({
           ...s,
           submitting: false,
-          errorMessage: "신고를 처리하지 못했어요. 다시 시도해 주세요.",
+          errorMessage: "Could not submit report. Please try again.",
         }));
+        onWriteSettled?.();
         return;
       }
 
+      onWriteSettled?.();
       setReportState((s) => ({
         ...s,
         submitting: false,
-        successMessage: "신고가 접수되었어요. 검토 후 조치할게요.",
+        successMessage: "Report submitted successfully.",
       }));
     },
-    [reportState.postId, reportState.submitting],
+    [onAuthRequired, onWriteSettled, reportState.postId, reportState.submitting],
   );
 
   return {
@@ -208,3 +249,4 @@ export function usePostActions<
     handleReport,
   };
 }
+

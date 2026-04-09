@@ -1,9 +1,11 @@
-import { readJsonBody } from "@/lib/api/request";
+﻿import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createBlockRepository } from "@/lib/blocks/repository";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 import type { CreateBlockBody } from "@/types/api";
 
 export async function POST(request: Request) {
@@ -14,7 +16,7 @@ export async function POST(request: Request) {
 
   if (!blockedUserId?.trim()) {
     return fail(
-      "차단할 사용자 ID가 필요해요.",
+      "Target user ID is required.",
       400,
       API_ERROR_CODE.VALIDATION_ERROR,
     );
@@ -39,9 +41,29 @@ export async function POST(request: Request) {
 
   if (user.id === blockedUserId) {
     return fail(
-      "자기 자신은 차단할 수 없어요.",
+      "You cannot block yourself.",
       400,
       API_ERROR_CODE.VALIDATION_ERROR,
+    );
+  }
+
+  await ensureProfileExistsForUser(supabase, user.id);
+
+  const quota = await consumeAnonymousWriteQuota({
+    supabase,
+    userId: user.id,
+    isAnonymous: Boolean(user.is_anonymous),
+  });
+
+  if (!quota.allowed) {
+    return fail(
+      "Too many write actions for this guest account. Please try again shortly.",
+      429,
+      API_ERROR_CODE.RATE_LIMITED,
+      {
+        resetAt: quota.resetAt,
+        remaining: quota.remaining,
+      },
     );
   }
 
@@ -49,11 +71,12 @@ export async function POST(request: Request) {
     await createBlockRepository(blockedUserId);
     return ok({ blocked: true as const });
   } catch (error) {
-    console.error("[api/blocks] 차단 실패:", error);
+    console.error("[api/blocks] block failed:", error);
     return fail(
-      "차단 처리 중 오류가 발생했어요.",
+      "Failed to block user.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );
   }
 }
+

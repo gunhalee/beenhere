@@ -88,6 +88,7 @@ export type GetMyProfileResponse = ApiResult<{
   id:                 string;
   nickname:           string;
   nicknameChangedAt:  string | null;
+  profileCreated?:    boolean;
   isAnonymous?:       boolean;
   googleLinked?:      boolean;
   canLinkGoogle?:     boolean;

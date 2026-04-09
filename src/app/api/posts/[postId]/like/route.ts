@@ -1,9 +1,11 @@
-import { readJsonBody } from "@/lib/api/request";
+﻿import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { likePost } from "@/lib/posts/mutations";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 import type { LikePostBody } from "@/types/api";
 
 type Context = { params: Promise<{ postId: string }> };
@@ -21,11 +23,11 @@ export async function POST(request: Request, context: Context) {
   const { latitude, longitude, placeLabel } = bodyResult.body;
 
   if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
-    return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
+    return fail("Valid location coordinates are required.", 400, API_ERROR_CODE.INVALID_LOCATION);
   }
 
   if (!placeLabel?.trim()) {
-    return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+    return fail("Place label is required.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
   if (hasSupabaseBrowserConfig()) {
@@ -41,6 +43,26 @@ export async function POST(request: Request, context: Context) {
         API_ERROR_CODE.UNAUTHORIZED,
       );
     }
+
+    await ensureProfileExistsForUser(supabase, user.id);
+
+    const quota = await consumeAnonymousWriteQuota({
+      supabase,
+      userId: user.id,
+      isAnonymous: Boolean(user.is_anonymous),
+    });
+
+    if (!quota.allowed) {
+      return fail(
+        "Too many write actions for this guest account. Please try again shortly.",
+        429,
+        API_ERROR_CODE.RATE_LIMITED,
+        {
+          resetAt: quota.resetAt,
+          remaining: quota.remaining,
+        },
+      );
+    }
   }
 
   try {
@@ -53,11 +75,12 @@ export async function POST(request: Request, context: Context) {
 
     return ok({ likeCount: result.likeCount });
   } catch (error) {
-    console.error("[api/posts/:postId/like] 라이크 실패:", error);
+    console.error("[api/posts/:postId/like] like failed:", error);
     return fail(
-      "라이크 처리 중 오류가 발생했어요.",
+      "Failed to process like.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );
   }
 }
+

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -103,24 +103,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login`);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) {
-    if (isLinkGoogleIntent) {
-      return redirectWithLinkStatus({
-        origin,
-        nextPath,
-        status: "failed",
-        reason: "profile_missing",
-      });
-    }
-    return NextResponse.redirect(`${origin}/onboarding`);
-  }
-
   if (isLinkGoogleIntent) {
     return redirectWithLinkStatus({
       origin,
@@ -131,3 +113,4 @@ export async function GET(request: Request) {
 
   return NextResponse.redirect(`${origin}${nextPath}`);
 }
+

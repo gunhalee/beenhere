@@ -74,6 +74,7 @@ describe("GET /api/profiles/me", () => {
       nickname: "Tester",
       nicknameChangedAt: null,
       createdAt: "2026-04-09T00:00:00.000Z",
+      profileCreated: true,
       isAnonymous: true,
       googleLinked: false,
       canLinkGoogle: true,
@@ -85,6 +86,7 @@ describe("GET /api/profiles/me", () => {
       data?: {
         id: string;
         nickname: string;
+        profileCreated: boolean;
         isAnonymous: boolean;
         googleLinked: boolean;
         canLinkGoogle: boolean;
@@ -96,21 +98,35 @@ describe("GET /api/profiles/me", () => {
     expect(json.data).toMatchObject({
       id: "user-1",
       nickname: "Tester",
+      profileCreated: true,
       isAnonymous: true,
       googleLinked: false,
       canLinkGoogle: true,
     });
   });
 
-  it("returns UNAUTHORIZED when my profile is missing", async () => {
-    vi.mocked(getMyProfileRepository).mockResolvedValue(null);
+  it("returns fallback viewer context when profile row is missing", async () => {
+    vi.mocked(getMyProfileRepository).mockResolvedValue({
+      id: "user-1",
+      nickname: "Guest",
+      nicknameChangedAt: null,
+      createdAt: "2026-04-09T00:00:00.000Z",
+      profileCreated: false,
+      isAnonymous: true,
+      googleLinked: false,
+      canLinkGoogle: true,
+    });
 
     const response = await GET();
-    const json = (await response.json()) as { ok: boolean; code?: string };
+    const json = (await response.json()) as {
+      ok: boolean;
+      data?: { profileCreated?: boolean; id?: string };
+    };
 
-    expect(response.status).toBe(401);
-    expect(json.ok).toBe(false);
-    expect(json.code).toBe("UNAUTHORIZED");
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.data?.id).toBe("user-1");
+    expect(json.data?.profileCreated).toBe(false);
   });
 });
 

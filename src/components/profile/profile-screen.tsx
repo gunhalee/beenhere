@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,11 +8,13 @@ import type {
 } from "@/types/domain";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import { startGoogleOAuth } from "@/lib/auth/google-oauth";
+import { ensureGuestSession } from "@/lib/auth/guest-session";
 import { useProfile, type ProfileTab } from "@/lib/hooks/use-profile";
 import { useProfileContext } from "@/lib/hooks/use-profile-context";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
 import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
+import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
 import { FeedReportDialog } from "@/components/feed/feed-report-dialog";
 import { ProfileHeader } from "./profile-header";
 import { ProfileBlockDialog } from "./profile-block-dialog";
@@ -31,13 +33,37 @@ const TAB_LABELS: Record<ProfileTab, string> = {
   likes: "Likes",
 };
 
-const LINK_RESULT_MESSAGES: Record<string, string> = {
-  identity_already_exists:
-    "This Google account is already linked to another user.",
-  exchange_failed: "Could not complete Google account linking. Please try again.",
-  missing_code: "Could not find a valid Google linking token.",
-  profile_missing: "Could not load profile information. Please try again.",
-  user_missing: "Could not verify user session. Please sign in again.",
+type LinkResultTone = "success" | "error";
+
+type LinkResultMessage = {
+  tone: LinkResultTone;
+  message: string;
+  showSwitchToGoogle?: boolean;
+};
+
+const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
+  identity_already_exists: {
+    tone: "error",
+    message:
+      "This Google account is already linked to another user. You can switch to that Google account. Guest data is not merged automatically.",
+    showSwitchToGoogle: true,
+  },
+  exchange_failed: {
+    tone: "error",
+    message: "Could not complete Google account linking. Please try again.",
+  },
+  missing_code: {
+    tone: "error",
+    message: "Could not find a valid Google linking token.",
+  },
+  profile_missing: {
+    tone: "error",
+    message: "Could not load profile information. Please try again.",
+  },
+  user_missing: {
+    tone: "error",
+    message: "Could not verify user session. Please sign in again.",
+  },
 };
 
 type ProfileLikeableItem = {
@@ -89,6 +115,17 @@ export function ProfileScreen({ userId }: Props) {
   const [likeError, setLikeError] = useState<string | null>(null);
   const [linkGoogleLoading, setLinkGoogleLoading] = useState(false);
   const [linkGoogleError, setLinkGoogleError] = useState<string | null>(null);
+  const [switchGoogleLoading, setSwitchGoogleLoading] = useState(false);
+
+  const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
+  const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
+  const [guestAuthLoading, setGuestAuthLoading] = useState(false);
+  const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
+
+  const openAccountChoice = useCallback(() => {
+    setAccountChoiceError(null);
+    setAccountChoiceOpen(true);
+  }, []);
 
   const updateAnyItem = useCallback(
     (postId: string, patch: Partial<ProfileLikeableItem>) => {
@@ -112,6 +149,7 @@ export function ProfileScreen({ userId }: Props) {
     coordsRef,
     onLocationError: setLikeError,
     onActionError: setLikeError,
+    onAuthRequired: openAccountChoice,
   });
 
   const onLike = useCallback(
@@ -161,12 +199,12 @@ export function ProfileScreen({ userId }: Props) {
 
     if (linkStatus === "failed") {
       const reasonKey = (linkReason ?? "").toLowerCase();
-      return {
-        tone: "error" as const,
-        message:
-          LINK_RESULT_MESSAGES[reasonKey] ??
-          "Could not complete Google account linking. Please try again.",
-      };
+      return (
+        LINK_RESULT_MESSAGES[reasonKey] ?? {
+          tone: "error" as const,
+          message: "Could not complete Google account linking. Please try again.",
+        }
+      );
     }
 
     return null;
@@ -190,6 +228,55 @@ export function ProfileScreen({ userId }: Props) {
       );
     }
   }, [linkGoogleLoading, userId]);
+
+  const handleSwitchToLinkedGoogle = useCallback(async () => {
+    if (switchGoogleLoading) return;
+
+    setSwitchGoogleLoading(true);
+    const result = await startGoogleOAuth({
+      intent: "login",
+      nextPath: `/profile/${userId}`,
+    });
+
+    if (!result.ok) {
+      setSwitchGoogleLoading(false);
+      setLikeError(result.error ?? "Could not start Google sign-in.");
+    }
+  }, [switchGoogleLoading, userId]);
+
+  const handleGuestContinue = useCallback(async () => {
+    if (guestAuthLoading || googleAuthLoading) return;
+
+    setGuestAuthLoading(true);
+    setAccountChoiceError(null);
+
+    const result = await ensureGuestSession();
+    if (!result.ok) {
+      setGuestAuthLoading(false);
+      setAccountChoiceError(result.error);
+      return;
+    }
+
+    // Session context is shared through Supabase cookies/storage, so a hard refresh is the safest sync path.
+    window.location.href = `${window.location.pathname}${window.location.search}`;
+  }, [googleAuthLoading, guestAuthLoading]);
+
+  const handleGoogleContinue = useCallback(async () => {
+    if (guestAuthLoading || googleAuthLoading) return;
+
+    setGoogleAuthLoading(true);
+    setAccountChoiceError(null);
+
+    const result = await startGoogleOAuth({
+      intent: "login",
+      nextPath: `/profile/${userId}`,
+    });
+
+    if (!result.ok) {
+      setGoogleAuthLoading(false);
+      setAccountChoiceError(result.error ?? "Could not start Google signup.");
+    }
+  }, [googleAuthLoading, guestAuthLoading, userId]);
 
   if (profileLoadState === "loading") {
     return (
@@ -251,7 +338,31 @@ export function ProfileScreen({ userId }: Props) {
             padding: "10px 20px",
           }}
         >
-          {linkResultMessage.message}
+          <div>{linkResultMessage.message}</div>
+          {linkResultMessage.showSwitchToGoogle ? (
+            <button
+              onClick={() => {
+                void handleSwitchToLinkedGoogle();
+              }}
+              type="button"
+              style={{
+                appearance: "none",
+                background: "none",
+                border: "none",
+                color: "#1d4ed8",
+                cursor: switchGoogleLoading ? "default" : "pointer",
+                fontSize: "13px",
+                fontWeight: 600,
+                marginTop: "6px",
+                padding: 0,
+                textDecoration: "underline",
+              }}
+            >
+              {switchGoogleLoading
+                ? "Switching account..."
+                : "Sign in with that Google account"}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -374,8 +485,30 @@ export function ProfileScreen({ userId }: Props) {
           onBlocked={handleBlocked}
           onUnblocked={handleUnblocked}
           onClose={() => setBlockDialogOpen(false)}
+          onAuthRequired={() => {
+            setBlockDialogOpen(false);
+            openAccountChoice();
+          }}
         />
       ) : null}
+
+      <AccountChoiceDialog
+        open={accountChoiceOpen}
+        guestLoading={guestAuthLoading}
+        googleLoading={googleAuthLoading}
+        errorMessage={accountChoiceError}
+        onGuestContinue={() => {
+          void handleGuestContinue();
+        }}
+        onGoogleContinue={() => {
+          void handleGoogleContinue();
+        }}
+        onClose={() => {
+          if (guestAuthLoading || googleAuthLoading) return;
+          setAccountChoiceOpen(false);
+        }}
+      />
     </div>
   );
 }
+

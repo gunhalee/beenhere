@@ -67,6 +67,7 @@ export type Profile = {
 // 본인만 접근하는 프로필 정보 (닉네임 재생성 쿨다운 판정 등)
 export type MyProfile = Profile & {
   nicknameChangedAt: string | null;
+  profileCreated?: boolean;
   isAnonymous?: boolean;
   googleLinked?: boolean;
   canLinkGoogle?: boolean;

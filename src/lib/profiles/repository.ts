@@ -89,23 +89,35 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 
   if (!user) return null;
 
+  const googleLinked = hasLinkedProvider(user, "google");
+  const isAnonymous = Boolean(user.is_anonymous);
+  const canLinkGoogle = !googleLinked;
+
   const { data, error } = await supabase
     .from("profiles")
     .select("id, nickname, nickname_changed_at, created_at")
     .eq("id", user.id)
     .single();
 
-  if (error || !data) return null;
-
-  const googleLinked = hasLinkedProvider(user, "google");
-  const isAnonymous = Boolean(user.is_anonymous);
-  const canLinkGoogle = !googleLinked;
+  if (error || !data) {
+    return {
+      id: user.id,
+      nickname: formatNicknameForDisplay("guest"),
+      nicknameChangedAt: null,
+      createdAt: user.created_at ?? new Date().toISOString(),
+      profileCreated: false,
+      isAnonymous,
+      googleLinked,
+      canLinkGoogle,
+    };
+  }
 
   return {
     id: data.id as string,
     nickname: formatNicknameForDisplay(data.nickname as string),
     nicknameChangedAt: (data.nickname_changed_at as string | null) ?? null,
     createdAt: data.created_at as string,
+    profileCreated: true,
     isAnonymous,
     googleLinked,
     canLinkGoogle,

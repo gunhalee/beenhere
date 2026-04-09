@@ -1,4 +1,4 @@
-import { fail, ok } from "@/lib/api/response";
+﻿import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -15,6 +15,7 @@ export async function GET() {
       id: "mock-user-id",
       nickname: formatNicknameForDisplay(generateNickname()),
       nicknameChangedAt: null,
+      profileCreated: true,
       isAnonymous: false,
       googleLinked: false,
       canLinkGoogle: false,
@@ -30,6 +31,7 @@ export async function GET() {
     id: profile.id,
     nickname: profile.nickname,
     nicknameChangedAt: profile.nicknameChangedAt,
+    profileCreated: profile.profileCreated ?? true,
     isAnonymous: profile.isAnonymous ?? false,
     googleLinked: profile.googleLinked ?? false,
     canLinkGoogle: profile.canLinkGoogle ?? false,
@@ -47,6 +49,14 @@ export async function PATCH() {
   const profile = await getMyProfileRepository();
   if (!profile) {
     return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
+  }
+
+  if (profile.profileCreated === false) {
+    return fail(
+      "Profile is created automatically on your first write action.",
+      400,
+      API_ERROR_CODE.VALIDATION_ERROR,
+    );
   }
 
   const result = await regenerateNicknameRepository(
@@ -137,3 +147,4 @@ export async function POST(request: Request) {
 
   return ok({ nickname: formatNicknameForDisplay(nickname) });
 }
+

@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { blockUserClient, unblockUserClient } from "@/lib/api/profile-client";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   onBlocked: () => void;
   onUnblocked?: () => void;
   onClose: () => void;
+  onAuthRequired?: () => void;
 };
 
 export function ProfileBlockDialog({
@@ -17,6 +19,7 @@ export function ProfileBlockDialog({
   onBlocked,
   onUnblocked,
   onClose,
+  onAuthRequired,
 }: Props) {
   const [blockLoading, setBlockLoading] = useState(false);
   const [unblockLoading, setUnblockLoading] = useState(false);
@@ -32,7 +35,11 @@ export function ProfileBlockDialog({
 
     if (!result.ok) {
       setBlockLoading(false);
-      setError(result.error ?? "차단에 실패했어요. 다시 시도해 주세요.");
+      if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+        onAuthRequired?.();
+        return;
+      }
+      setError(result.error ?? "Could not block user. Please try again.");
       return;
     }
 
@@ -48,7 +55,11 @@ export function ProfileBlockDialog({
 
     if (!result.ok) {
       setUnblockLoading(false);
-      setError(result.error ?? "차단 해제에 실패했어요. 다시 시도해 주세요.");
+      if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+        onAuthRequired?.();
+        return;
+      }
+      setError(result.error ?? "Could not unblock user. Please try again.");
       return;
     }
 
@@ -58,9 +69,8 @@ export function ProfileBlockDialog({
 
   return (
     <>
-      {/* 백드롭 */}
       <button
-        aria-label="닫기"
+        aria-label="Close dialog"
         onClick={onClose}
         type="button"
         style={{
@@ -75,11 +85,10 @@ export function ProfileBlockDialog({
         }}
       />
 
-      {/* 다이얼로그 */}
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="차단 확인"
+        aria-label="Block user confirmation"
         style={{
           background: "#ffffff",
           borderRadius: "20px",
@@ -103,7 +112,7 @@ export function ProfileBlockDialog({
             textAlign: "center",
           }}
         >
-          {targetNickname}님을 차단할까요?
+          Block {targetNickname}?
         </p>
         <p
           style={{
@@ -114,9 +123,9 @@ export function ProfileBlockDialog({
             textAlign: "center",
           }}
         >
-          서로의 글과 프로필이 보이지 않아요.
+          You will not see each other&apos;s posts and profiles.
           <br />
-          차단 후 이 프로필을 떠납니다.
+          You can unblock later.
         </p>
 
         {error ? (
@@ -150,7 +159,7 @@ export function ProfileBlockDialog({
               padding: "12px",
             }}
           >
-            취소
+            Cancel
           </button>
           <button
             disabled={loading}
@@ -169,7 +178,7 @@ export function ProfileBlockDialog({
               padding: "12px",
             }}
           >
-            {blockLoading ? "차단 중…" : "차단하기"}
+            {blockLoading ? "Blocking..." : "Block"}
           </button>
         </div>
         <button
@@ -189,9 +198,10 @@ export function ProfileBlockDialog({
             width: "100%",
           }}
         >
-          {unblockLoading ? "해제 중…" : "차단 해제하기"}
+          {unblockLoading ? "Unblocking..." : "Unblock"}
         </button>
       </div>
     </>
   );
 }
+
