@@ -18,7 +18,7 @@ vitest.config.ts
 vitest.setup.ts
 
 # Local infra/docs not required for runtime
-supabase
+/supabase
 beenhere_prd.md
 beenhere_prd_preprint.md
 llm_maintenance_guide.md
