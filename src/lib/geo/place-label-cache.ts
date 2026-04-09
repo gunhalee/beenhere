@@ -8,6 +8,7 @@ type PlaceLabelCacheEntry = {
 
 type ResolvePlaceLabelWithCacheOptions = {
   ttlMs?: number;
+  onRevalidated?: (placeLabel: string) => void;
 };
 
 const DEFAULT_PLACE_LABEL_TTL_MS = 10 * 60 * 1000;
@@ -35,18 +36,14 @@ export function getCachedPlaceLabel(coords: Coordinates): string | null {
   return cached.placeLabel;
 }
 
-export async function resolvePlaceLabelWithCache(
+function fetchLatestPlaceLabelAndCache(
+  key: string,
   coords: Coordinates,
-  options?: ResolvePlaceLabelWithCacheOptions,
-): Promise<string> {
-  const cached = getCachedPlaceLabel(coords);
-  if (cached) return cached;
-
-  const key = getCacheKey(coords);
+  ttlMs: number,
+) {
   const inFlight = inFlightRequests.get(key);
   if (inFlight) return inFlight;
 
-  const ttlMs = options?.ttlMs ?? DEFAULT_PLACE_LABEL_TTL_MS;
   const request = resolvePlaceLabel(coords)
     .then((placeLabel) => {
       placeLabelCache.set(key, {
@@ -61,4 +58,34 @@ export async function resolvePlaceLabelWithCache(
 
   inFlightRequests.set(key, request);
   return request;
+}
+
+export async function resolvePlaceLabelWithCache(
+  coords: Coordinates,
+  options?: ResolvePlaceLabelWithCacheOptions,
+): Promise<string> {
+  const key = getCacheKey(coords);
+  const ttlMs = options?.ttlMs ?? DEFAULT_PLACE_LABEL_TTL_MS;
+  const cached = getCachedPlaceLabel(coords);
+  if (cached) {
+    const revalidateRequest = fetchLatestPlaceLabelAndCache(key, coords, ttlMs);
+    if (options?.onRevalidated) {
+      void revalidateRequest
+        .then((latestPlaceLabel) => {
+          if (latestPlaceLabel !== cached) {
+            options.onRevalidated?.(latestPlaceLabel);
+          }
+        })
+        .catch(() => {
+          // Keep cached value when refresh fails.
+        });
+    } else {
+      void revalidateRequest.catch(() => {
+        // Keep cached value when refresh fails.
+      });
+    }
+    return cached;
+  }
+
+  return fetchLatestPlaceLabelAndCache(key, coords, ttlMs);
 }

@@ -40,7 +40,12 @@ export function ComposeSheet({
   useEffect(() => {
     setTimeout(() => textareaRef.current?.focus(), 100);
 
-    resolvePlaceLabelWithCache(coords)
+    resolvePlaceLabelWithCache(coords, {
+      onRevalidated: (latestLabel) => {
+        if (!mountedRef.current) return;
+        setPlaceLabel(latestLabel);
+      },
+    })
       .then((label) => {
         if (!mountedRef.current) return;
         setPlaceLabel(label);
