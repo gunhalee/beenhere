@@ -70,7 +70,6 @@ export default function OnboardingPage() {
           width: "100%",
         }}
       >
-        {/* 헤더 */}
         <div style={{ textAlign: "center" }}>
           <p
             style={{
@@ -106,11 +105,10 @@ export default function OnboardingPage() {
           >
             beenhere에서 사용할 이름이에요.
             <br />
-            나중에 7일마다 바꿀 수 있어요.
+            취향은 7일마다 바꿀 수 있어요.
           </p>
         </div>
 
-        {/* 닉네임 후보 */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {candidates.map((nick) => {
             const isSelected = selected === nick;
@@ -145,15 +143,12 @@ export default function OnboardingPage() {
                 }}
               >
                 <span>{formatNicknameForDisplay(nick)}</span>
-                {isSelected ? (
-                  <span style={{ fontSize: "18px" }}>✓</span>
-                ) : null}
+                {isSelected ? <span style={{ fontSize: "18px" }}>✓</span> : null}
               </button>
             );
           })}
         </div>
 
-        {/* 다시 생성 */}
         <button
           onClick={refreshCandidates}
           type="button"
@@ -178,7 +173,6 @@ export default function OnboardingPage() {
           다른 닉네임 보기
         </button>
 
-        {/* 에러 메시지 */}
         {error ? (
           <p
             role="alert"
@@ -193,7 +187,6 @@ export default function OnboardingPage() {
           </p>
         ) : null}
 
-        {/* 시작 버튼 */}
         <button
           disabled={!selected || submitting}
           onClick={handleSubmit}
@@ -216,9 +209,10 @@ export default function OnboardingPage() {
             width: "100%",
           }}
         >
-          {submitting ? "저장 중…" : "beenhere 시작하기"}
+          {submitting ? "저장 중..." : "beenhere 시작하기"}
         </button>
       </div>
     </main>
   );
 }
+

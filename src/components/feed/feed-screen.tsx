@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
@@ -221,7 +221,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     } else {
       // Fallback for transient profile-read failures right after session bootstrap.
       setResolvedCurrentUserId(sessionResult.userId);
-      setResolvedCurrentNickname("Guest");
+      setResolvedCurrentNickname("게스트");
       setResolvedHasProfile(false);
     }
 
@@ -243,7 +243,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
 
     if (!result.ok && mountedRef.current) {
       setGoogleAuthLoading(false);
-      setAccountChoiceError(result.error ?? "Could not start Google signup.");
+      setAccountChoiceError(result.error ?? "Google 가입을 시작하지 못했어요.");
     }
   }, [googleAuthLoading, guestAuthLoading, mountedRef]);
 
@@ -457,10 +457,10 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
           }}
         >
           {pullRefreshing
-            ? "Refreshing..."
+            ? "새로고침 중..."
             : pullReady
-              ? "Release to refresh"
-              : "Pull to refresh"}
+              ? "놓으면 새로고침"
+              : "당겨서 새로고침"}
         </div>
 
         <FeedList

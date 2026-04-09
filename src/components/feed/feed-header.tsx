@@ -126,7 +126,7 @@ export function FeedHeader({
                 whiteSpace: "nowrap",
               }}
             >
-              {currentNickname ?? "Guest"}
+              {currentNickname ?? "게스트"}
             </span>
           </span>
         ) : (

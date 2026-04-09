@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
@@ -39,7 +39,7 @@ export function ProfileBlockDialog({
         onAuthRequired?.();
         return;
       }
-      setError(result.error ?? "Could not block user. Please try again.");
+      setError(result.error ?? "차단에 실패했어요. 다시 시도해 주세요.");
       return;
     }
 
@@ -59,7 +59,7 @@ export function ProfileBlockDialog({
         onAuthRequired?.();
         return;
       }
-      setError(result.error ?? "Could not unblock user. Please try again.");
+      setError(result.error ?? "차단 해제에 실패했어요. 다시 시도해 주세요.");
       return;
     }
 
@@ -70,7 +70,7 @@ export function ProfileBlockDialog({
   return (
     <>
       <button
-        aria-label="Close dialog"
+        aria-label="닫기"
         onClick={onClose}
         type="button"
         style={{
@@ -88,7 +88,7 @@ export function ProfileBlockDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Block user confirmation"
+        aria-label="차단 확인"
         style={{
           background: "#ffffff",
           borderRadius: "20px",
@@ -112,7 +112,7 @@ export function ProfileBlockDialog({
             textAlign: "center",
           }}
         >
-          Block {targetNickname}?
+          {targetNickname}님을 차단할까요?
         </p>
         <p
           style={{
@@ -123,9 +123,9 @@ export function ProfileBlockDialog({
             textAlign: "center",
           }}
         >
-          You will not see each other&apos;s posts and profiles.
+          서로의 글과 프로필이 보이지 않아요.
           <br />
-          You can unblock later.
+          언제든 다시 차단 해제할 수 있어요.
         </p>
 
         {error ? (
@@ -159,7 +159,7 @@ export function ProfileBlockDialog({
               padding: "12px",
             }}
           >
-            Cancel
+            취소
           </button>
           <button
             disabled={loading}
@@ -178,7 +178,7 @@ export function ProfileBlockDialog({
               padding: "12px",
             }}
           >
-            {blockLoading ? "Blocking..." : "Block"}
+            {blockLoading ? "차단 중..." : "차단하기"}
           </button>
         </div>
         <button
@@ -198,10 +198,9 @@ export function ProfileBlockDialog({
             width: "100%",
           }}
         >
-          {unblockLoading ? "Unblocking..." : "Unblock"}
+          {unblockLoading ? "차단 해제 중..." : "차단 해제"}
         </button>
       </div>
     </>
   );
 }
-

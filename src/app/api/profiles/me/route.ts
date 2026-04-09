@@ -1,4 +1,4 @@
-﻿import { fail, ok } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -53,7 +53,7 @@ export async function PATCH() {
 
   if (profile.profileCreated === false) {
     return fail(
-      "Profile is created automatically on your first write action.",
+      "프로필은 첫 쓰기 동작 시 자동으로 생성돼요.",
       400,
       API_ERROR_CODE.VALIDATION_ERROR,
     );

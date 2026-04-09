@@ -38,7 +38,7 @@ export async function DELETE(_request: Request, context: Context) {
 
   if (!quota.allowed) {
     return fail(
-      "Too many write actions for this guest account. Please try again shortly.",
+      "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
       429,
       API_ERROR_CODE.RATE_LIMITED,
       {
@@ -52,9 +52,9 @@ export async function DELETE(_request: Request, context: Context) {
     await deleteBlockRepository(blockedUserId);
     return ok({ unblocked: true as const });
   } catch (error) {
-    console.error("[api/blocks/:userId] unblock failed:", error);
+    console.error("[api/blocks/:userId] 차단 해제 실패:", error);
     return fail(
-      "Failed to unblock user.",
+      "차단 해제 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

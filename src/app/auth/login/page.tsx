@@ -6,15 +6,15 @@ import { ensureGuestSession } from "@/lib/auth/guest-session";
 import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  missing_code: "The login code is missing or invalid. Please try again.",
-  exchange_failed: "We could not complete the login flow. Please try again.",
+  missing_code: "로그인 코드가 유효하지 않아요. 다시 시도해 주세요.",
+  exchange_failed: "로그인 처리 중 오류가 발생했어요. 다시 시도해 주세요.",
 };
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const errorKey = searchParams.get("error");
   const queryErrorMessage = errorKey
-    ? (ERROR_MESSAGES[errorKey] ?? "Login failed. Please try again.")
+    ? (ERROR_MESSAGES[errorKey] ?? "로그인에 실패했어요. 다시 시도해 주세요.")
     : null;
 
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -36,7 +36,7 @@ function LoginForm() {
 
     if (!result.ok) {
       setGoogleLoading(false);
-      setRuntimeErrorMessage(result.error || "Login failed. Please try again.");
+      setRuntimeErrorMessage(result.error || "로그인에 실패했어요. 다시 시도해 주세요.");
     }
   }
 
@@ -108,7 +108,7 @@ function LoginForm() {
           width: "100%",
         }}
       >
-        {googleLoading ? "Signing in..." : "Continue with Google"}
+        {googleLoading ? "로그인 중..." : "Google로 계속하기"}
       </button>
 
       <button
@@ -130,7 +130,7 @@ function LoginForm() {
           width: "100%",
         }}
       >
-        {guestLoading ? "Preparing guest account..." : "Continue as Guest"}
+        {guestLoading ? "게스트 계정 준비 중..." : "게스트로 계속하기"}
       </button>
     </div>
   );
@@ -211,9 +211,9 @@ export default function LoginPage() {
                 margin: 0,
               }}
             >
-              Leave words in places.
+              글은 장소에 남고,
               <br />
-              Discover people by following stories.
+              사람은 글을 따라 발견된다.
             </p>
           </div>
         </div>
@@ -236,7 +236,7 @@ export default function LoginPage() {
                 width: "100%",
               }}
             >
-              Continue
+              계속하기
             </button>
           }
         >
@@ -252,7 +252,7 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          Guest account can be linked to Google later from your profile.
+          게스트 계정은 프로필 화면에서 나중에 Google 계정과 연동할 수 있어요.
         </p>
       </div>
     </main>

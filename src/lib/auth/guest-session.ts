@@ -111,7 +111,7 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
   if (created.error || !created.data.session?.user) {
     return {
       ok: false,
-      error: created.error?.message ?? "Guest login failed. Please try again.",
+      error: created.error?.message ?? "게스트 로그인에 실패했어요. 다시 시도해 주세요.",
     };
   }
 

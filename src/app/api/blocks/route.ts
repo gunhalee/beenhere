@@ -1,4 +1,4 @@
-﻿import { readJsonBody } from "@/lib/api/request";
+import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   if (!blockedUserId?.trim()) {
     return fail(
-      "Target user ID is required.",
+      "차단할 사용자 ID가 필요해요.",
       400,
       API_ERROR_CODE.VALIDATION_ERROR,
     );
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   if (user.id === blockedUserId) {
     return fail(
-      "You cannot block yourself.",
+      "자기 자신은 차단할 수 없어요.",
       400,
       API_ERROR_CODE.VALIDATION_ERROR,
     );
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
   if (!quota.allowed) {
     return fail(
-      "Too many write actions for this guest account. Please try again shortly.",
+      "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
       429,
       API_ERROR_CODE.RATE_LIMITED,
       {
@@ -71,9 +71,9 @@ export async function POST(request: Request) {
     await createBlockRepository(blockedUserId);
     return ok({ blocked: true as const });
   } catch (error) {
-    console.error("[api/blocks] block failed:", error);
+    console.error("[api/blocks] 차단 실패:", error);
     return fail(
-      "Failed to block user.",
+      "차단 처리 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

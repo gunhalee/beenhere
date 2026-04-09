@@ -127,7 +127,7 @@ export async function fetchNearbyFeed(params: NearbyFeedParams) {
 
   const request = fetchApi<FeedData>(`/api/feed/nearby?${createNearbyQuery(params)}`, {
     timeoutMs: FEED_NEARBY_TIMEOUT_MS,
-    timeoutErrorMessage: "Feed request is taking too long. Please try again.",
+    timeoutErrorMessage: "피드 요청이 지연되고 있어요. 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_NEARBY,
   }).finally(() => {
     if (inFlightNearbyRequests.get(requestKey) === request) {
@@ -152,7 +152,7 @@ export async function fetchFeedState(options?: { force?: boolean }) {
 
   const request = fetchApi<FeedStateData>("/api/feed/state", {
     timeoutMs: FEED_STATE_TIMEOUT_MS,
-    timeoutErrorMessage: "Feed state check is delayed.",
+    timeoutErrorMessage: "피드 상태 확인이 지연되고 있어요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_STATE,
   })
     .then((result) => {
@@ -187,7 +187,7 @@ export async function createPostClient(body: CreatePostBodyClient) {
         clientRequestId,
       },
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
-      timeoutErrorMessage: "Create-post request is taking too long. Please retry.",
+      timeoutErrorMessage: "글 작성 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_CREATE,
     }),
   );
@@ -206,7 +206,7 @@ export async function likePostClient(
       method: "POST",
       body,
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
-      timeoutErrorMessage: "Like request is taking too long. Please retry.",
+      timeoutErrorMessage: "라이크 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_LIKE,
     }),
   );
@@ -220,7 +220,7 @@ export async function deletePostClient(postId: string) {
   return fetchApi<{ postId: string }>(`/api/posts/${postId}`, {
     method: "DELETE",
     timeoutMs: FEED_WRITE_TIMEOUT_MS,
-    timeoutErrorMessage: "Delete request is taking too long. Please retry.",
+    timeoutErrorMessage: "삭제 요청이 지연되고 있어요. 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_DELETE,
   });
 }
@@ -235,7 +235,7 @@ export async function reportPostClient(postId: string, reasonCode: string) {
       method: "POST",
       body: { reasonCode },
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
-      timeoutErrorMessage: "Report request is taking too long. Please retry.",
+      timeoutErrorMessage: "신고 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_REPORT,
     }),
   );

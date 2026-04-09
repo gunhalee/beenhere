@@ -29,8 +29,8 @@ type Props = {
 };
 
 const TAB_LABELS: Record<ProfileTab, string> = {
-  posts: "Posts",
-  likes: "Likes",
+  posts: "작성한 글",
+  likes: "라이크한 글",
 };
 
 type LinkResultTone = "success" | "error";
@@ -45,24 +45,24 @@ const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
   identity_already_exists: {
     tone: "error",
     message:
-      "This Google account is already linked to another user. You can switch to that Google account. Guest data is not merged automatically.",
+      "이미 다른 사용자에 연동된 Google 계정이에요. 해당 Google 계정으로 전환할 수 있어요. 게스트 데이터는 자동 병합되지 않아요.",
     showSwitchToGoogle: true,
   },
   exchange_failed: {
     tone: "error",
-    message: "Could not complete Google account linking. Please try again.",
+    message: "Google 계정 연동을 완료하지 못했어요. 다시 시도해 주세요.",
   },
   missing_code: {
     tone: "error",
-    message: "Could not find a valid Google linking token.",
+    message: "유효한 Google 연동 토큰을 찾지 못했어요.",
   },
   profile_missing: {
     tone: "error",
-    message: "Could not load profile information. Please try again.",
+    message: "프로필 정보를 불러오지 못했어요. 다시 시도해 주세요.",
   },
   user_missing: {
     tone: "error",
-    message: "Could not verify user session. Please sign in again.",
+    message: "사용자 세션을 확인하지 못했어요. 다시 로그인해 주세요.",
   },
 };
 
@@ -182,7 +182,7 @@ export function ProfileScreen({ userId }: Props) {
 
   const handleUnblocked = useCallback(() => {
     setBlockDialogOpen(false);
-    setBlockActionMessage("User unblocked.");
+    setBlockActionMessage("차단을 해제했어요.");
   }, []);
 
   const showLinkGoogleBanner =
@@ -193,7 +193,7 @@ export function ProfileScreen({ userId }: Props) {
     if (linkStatus === "success") {
       return {
         tone: "success" as const,
-        message: "Google account linked successfully.",
+        message: "Google 계정 연동이 완료됐어요.",
       };
     }
 
@@ -202,7 +202,7 @@ export function ProfileScreen({ userId }: Props) {
       return (
         LINK_RESULT_MESSAGES[reasonKey] ?? {
           tone: "error" as const,
-          message: "Could not complete Google account linking. Please try again.",
+          message: "Google 계정 연동을 완료하지 못했어요. 다시 시도해 주세요.",
         }
       );
     }
@@ -224,7 +224,7 @@ export function ProfileScreen({ userId }: Props) {
     if (!result.ok) {
       setLinkGoogleLoading(false);
       setLinkGoogleError(
-        result.error ?? "Could not start Google account linking.",
+        result.error ?? "Google 계정 연동을 시작하지 못했어요.",
       );
     }
   }, [linkGoogleLoading, userId]);
@@ -240,7 +240,7 @@ export function ProfileScreen({ userId }: Props) {
 
     if (!result.ok) {
       setSwitchGoogleLoading(false);
-      setLikeError(result.error ?? "Could not start Google sign-in.");
+      setLikeError(result.error ?? "Google 로그인을 시작하지 못했어요.");
     }
   }, [switchGoogleLoading, userId]);
 
@@ -274,14 +274,14 @@ export function ProfileScreen({ userId }: Props) {
 
     if (!result.ok) {
       setGoogleAuthLoading(false);
-      setAccountChoiceError(result.error ?? "Could not start Google signup.");
+      setAccountChoiceError(result.error ?? "Google 가입을 시작하지 못했어요.");
     }
   }, [googleAuthLoading, guestAuthLoading, userId]);
 
   if (profileLoadState === "loading") {
     return (
       <div style={{ minHeight: "100dvh", padding: "24px" }}>
-        <LoadingState label="Loading profile..." />
+        <LoadingState label="프로필 불러오는 중..." />
       </div>
     );
   }
@@ -292,7 +292,7 @@ export function ProfileScreen({ userId }: Props) {
         <ErrorState
           message={
             profileErrorMessage ??
-            "This profile does not exist or cannot be accessed."
+            "존재하지 않거나 접근할 수 없는 프로필이에요."
           }
         />
       </div>
@@ -359,8 +359,8 @@ export function ProfileScreen({ userId }: Props) {
               }}
             >
               {switchGoogleLoading
-                ? "Switching account..."
-                : "Sign in with that Google account"}
+                ? "계정 전환 중..."
+                : "해당 Google 계정으로 로그인"}
             </button>
           ) : null}
         </div>

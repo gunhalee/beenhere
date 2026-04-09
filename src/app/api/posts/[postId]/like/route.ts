@@ -23,11 +23,11 @@ export async function POST(request: Request, context: Context) {
   const { latitude, longitude, placeLabel } = bodyResult.body;
 
   if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
-    return fail("Valid location coordinates are required.", 400, API_ERROR_CODE.INVALID_LOCATION);
+    return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
   }
 
   if (!placeLabel?.trim()) {
-    return fail("Place label is required.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+    return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
   if (hasSupabaseBrowserConfig()) {
@@ -54,7 +54,7 @@ export async function POST(request: Request, context: Context) {
 
     if (!quota.allowed) {
       return fail(
-        "Too many write actions for this guest account. Please try again shortly.",
+        "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
         429,
         API_ERROR_CODE.RATE_LIMITED,
         {
@@ -75,9 +75,9 @@ export async function POST(request: Request, context: Context) {
 
     return ok({ likeCount: result.likeCount });
   } catch (error) {
-    console.error("[api/posts/:postId/like] like failed:", error);
+    console.error("[api/posts/:postId/like] 라이크 실패:", error);
     return fail(
-      "Failed to process like.",
+      "라이크 처리 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

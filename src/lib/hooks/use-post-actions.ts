@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useRef, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
@@ -84,7 +84,7 @@ export function usePostActions<
         return await resolvePlaceLabelWithCache(coords);
       } catch (error) {
         onLocationError?.(getGeocodingErrorMessage(error));
-        return fallbackLabel?.trim() || "Current location";
+        return fallbackLabel?.trim() || "현재 위치";
       }
     },
     [onLocationError],
@@ -130,7 +130,7 @@ export function usePostActions<
         }
 
         onWriteSettled?.();
-        onActionError?.(result.error ?? "Could not complete like. Please try again.");
+        onActionError?.(result.error ?? "라이크를 처리하지 못했어요. 다시 시도해 주세요.");
         return;
       }
 
@@ -168,8 +168,8 @@ export function usePostActions<
         }
 
         onWriteSettled?.();
-        onActionError?.(result.error ?? "Could not delete post. Please try again.");
-        console.error("[usePostActions] post delete failed:", result.error);
+        onActionError?.(result.error ?? "글 삭제에 실패했어요. 다시 시도해 주세요.");
+        console.error("[usePostActions] 삭제 실패:", result.error);
         return;
       }
       onWriteSettled?.();
@@ -224,7 +224,7 @@ export function usePostActions<
         setReportState((s) => ({
           ...s,
           submitting: false,
-          errorMessage: "Could not submit report. Please try again.",
+          errorMessage: "신고를 처리하지 못했어요. 다시 시도해 주세요.",
         }));
         onWriteSettled?.();
         return;
@@ -234,7 +234,7 @@ export function usePostActions<
       setReportState((s) => ({
         ...s,
         submitting: false,
-        successMessage: "Report submitted successfully.",
+        successMessage: "신고가 접수됐어요. 검토 후 조치할게요.",
       }));
     },
     [onAuthRequired, onWriteSettled, reportState.postId, reportState.submitting],

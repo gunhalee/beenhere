@@ -19,7 +19,7 @@ export async function POST(request: Request, context: Context) {
   const { reasonCode } = bodyResult.body;
 
   if (!reasonCode?.trim()) {
-    return fail("Reason code is required.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+    return fail("신고 사유를 선택해 주세요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
   if (hasSupabaseBrowserConfig()) {
@@ -46,7 +46,7 @@ export async function POST(request: Request, context: Context) {
 
     if (!quota.allowed) {
       return fail(
-        "Too many write actions for this guest account. Please try again shortly.",
+        "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
         429,
         API_ERROR_CODE.RATE_LIMITED,
         {
@@ -66,9 +66,9 @@ export async function POST(request: Request, context: Context) {
 
     return ok({ postId });
   } catch (error) {
-    console.error("[api/posts/:postId/report] report failed:", error);
+    console.error("[api/posts/:postId/report] 신고 실패:", error);
     return fail(
-      "Failed to submit report.",
+      "신고 처리 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

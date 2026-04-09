@@ -26,7 +26,7 @@ export function AccountChoiceDialog({
   return (
     <>
       <button
-        aria-label="Close dialog"
+        aria-label="닫기"
         onClick={onClose}
         type="button"
         style={{
@@ -42,7 +42,7 @@ export function AccountChoiceDialog({
       />
 
       <div
-        aria-label="Choose account type"
+        aria-label="계정 유형 선택"
         aria-modal="true"
         role="dialog"
         style={{
@@ -68,7 +68,7 @@ export function AccountChoiceDialog({
             margin: "0 0 10px",
           }}
         >
-          Continue to write
+          계속하려면 계정이 필요해요
         </h2>
         <p
           style={{
@@ -78,8 +78,9 @@ export function AccountChoiceDialog({
             margin: "0 0 18px",
           }}
         >
-          This action requires an account. You can continue with a guest account or
-          sign up with Google.
+          이 작업은 계정이 필요해요.
+          <br />
+          게스트로 계속하거나 Google로 가입할 수 있어요.
         </p>
 
         {errorMessage ? (
@@ -114,7 +115,7 @@ export function AccountChoiceDialog({
               textAlign: "center",
             }}
           >
-            {guestLoading ? "Preparing guest account..." : "Continue as Guest"}
+            {guestLoading ? "게스트 계정 준비 중..." : "게스트로 계속"}
           </button>
 
           <button
@@ -134,7 +135,7 @@ export function AccountChoiceDialog({
               textAlign: "center",
             }}
           >
-            {googleLoading ? "Redirecting to Google..." : "Sign up with Google"}
+            {googleLoading ? "Google로 이동 중..." : "Google로 가입"}
           </button>
 
           <button
@@ -153,7 +154,7 @@ export function AccountChoiceDialog({
               textAlign: "center",
             }}
           >
-            Not now
+            나중에
           </button>
         </div>
       </div>

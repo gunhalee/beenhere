@@ -33,11 +33,11 @@ export async function GET(_request: Request, context: Context) {
       });
     }
 
-    return fail("User not found.", 404, API_ERROR_CODE.NOT_FOUND);
+    return fail("존재하지 않는 사용자예요.", 404, API_ERROR_CODE.NOT_FOUND);
   } catch (error) {
-    console.error("[api/profiles/:userId] failed:", error);
+    console.error("[api/profiles/:userId] 조회 실패:", error);
     return fail(
-      "Failed to load profile.",
+      "프로필을 불러오는 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

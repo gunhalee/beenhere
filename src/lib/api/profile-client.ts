@@ -1,5 +1,5 @@
-﻿/**
- * ?꾨줈??愿???대씪?댁뼵???ъ씠??API ?몄텧 ?⑥닔.
+/**
+ * 프로필 관련 클라이언트 사이드 API 호출 함수.
  */
 
 import { fetchApi } from "./client";
@@ -113,7 +113,7 @@ export function updateMyProfileCacheNickname(input: {
 }
 
 // ---------------------------
-// ?꾨줈??議고쉶
+// 프로필 조회
 // ---------------------------
 
 export async function fetchProfileClient(
@@ -136,7 +136,7 @@ export async function fetchProfileClient(
 
   const requestPromise = fetchApi<PublicProfileData>(`/api/profiles/${userId}`, {
     timeoutMs: PROFILE_READ_TIMEOUT_MS,
-    timeoutErrorMessage: "?꾨줈???묐떟??吏?곕릺怨??덉뼱?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??",
+    timeoutErrorMessage: "프로필 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE,
   })
     .then((result) => {
@@ -170,7 +170,7 @@ export async function fetchMyProfileClient(options?: { force?: boolean }) {
 
   const requestPromise = fetchApi<MyProfileData>("/api/profiles/me", {
     timeoutMs: PROFILE_READ_TIMEOUT_MS,
-    timeoutErrorMessage: "???꾨줈???묐떟??吏?곕릺怨??덉뼱?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??",
+    timeoutErrorMessage: "내 프로필 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_ME,
   })
     .then((result) => {
@@ -198,7 +198,7 @@ export async function fetchMyProfileClient(options?: { force?: boolean }) {
 }
 
 // ---------------------------
-// ?묒꽦??湲 紐⑸줉
+// 작성한 글 목록
 // ---------------------------
 
 export async function fetchProfilePostsClient(
@@ -214,14 +214,14 @@ export async function fetchProfilePostsClient(
     `/api/profiles/${userId}/posts?${sp.toString()}`,
     {
       timeoutMs: PROFILE_READ_TIMEOUT_MS,
-      timeoutErrorMessage: "?묒꽦 湲 紐⑸줉 ?묐떟??吏?곕릺怨??덉뼱?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??",
+      timeoutErrorMessage: "작성 글 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_POSTS,
     },
   );
 }
 
 // ---------------------------
-// ?쇱씠?ы븳 湲 紐⑸줉
+// 라이크한 글 목록
 // ---------------------------
 
 export async function fetchProfileLikesClient(
@@ -237,14 +237,14 @@ export async function fetchProfileLikesClient(
     `/api/profiles/${userId}/likes?${sp.toString()}`,
     {
       timeoutMs: PROFILE_READ_TIMEOUT_MS,
-      timeoutErrorMessage: "?쇱씠??紐⑸줉 ?묐떟??吏?곕릺怨??덉뼱?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??",
+      timeoutErrorMessage: "라이크 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_LIKES,
     },
   );
 }
 
 // ---------------------------
-// ??湲 ?쇱씠而?紐⑸줉 (?묒꽦???꾩슜)
+// 내 글 라이커 목록 (작성자 전용)
 // ---------------------------
 
 export async function fetchPostLikersClient(
@@ -259,14 +259,14 @@ export async function fetchPostLikersClient(
     `/api/posts/${postId}/likers?${sp.toString()}`,
     {
       timeoutMs: PROFILE_READ_TIMEOUT_MS,
-      timeoutErrorMessage: "?쇱씠而?紐⑸줉 ?묐떟??吏?곕릺怨??덉뼱?? ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??",
+      timeoutErrorMessage: "라이커 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_LIKERS,
     },
   );
 }
 
 // ---------------------------
-// 李⑤떒 / 李⑤떒 ?댁젣
+// 차단 / 차단 해제
 // ---------------------------
 
 export async function blockUserClient(blockedUserId: string) {
@@ -274,7 +274,7 @@ export async function blockUserClient(blockedUserId: string) {
     method: "POST",
     body: { blockedUserId },
     timeoutMs: PROFILE_WRITE_TIMEOUT_MS,
-    timeoutErrorMessage: "李⑤떒 ?붿껌??吏?곕릺怨??덉뼱?? ?ㅼ떆 ?쒕룄??二쇱꽭??",
+    timeoutErrorMessage: "차단 요청이 지연되고 있어요. 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_BLOCK_CREATE,
   });
 }
@@ -283,22 +283,20 @@ export async function unblockUserClient(blockedUserId: string) {
   return fetchApi<{ unblocked: true }>(`/api/blocks/${blockedUserId}`, {
     method: "DELETE",
     timeoutMs: PROFILE_WRITE_TIMEOUT_MS,
-    timeoutErrorMessage: "李⑤떒 ?댁젣 ?붿껌??吏?곕릺怨??덉뼱?? ?ㅼ떆 ?쒕룄??二쇱꽭??",
+    timeoutErrorMessage: "차단 해제 요청이 지연되고 있어요. 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_BLOCK_DELETE,
   });
 }
 
 // ---------------------------
-// ?됰꽕???ъ깮??
+// 닉네임 재생성
 // ---------------------------
 
 export async function regenNicknameClient() {
   return fetchApi<{ nickname: string; nicknameChangedAt: string }>("/api/profiles/me", {
     method: "PATCH",
     timeoutMs: PROFILE_WRITE_TIMEOUT_MS,
-    timeoutErrorMessage: "?됰꽕??蹂寃??붿껌??吏?곕릺怨??덉뼱?? ?ㅼ떆 ?쒕룄??二쇱꽭??",
+    timeoutErrorMessage: "닉네임 변경 요청이 지연되고 있어요. 다시 시도해 주세요.",
     timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_NICKNAME,
   });
 }
-
-
