@@ -112,6 +112,25 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const pullReady = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
 
   useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const prevHtmlOverscroll = html.style.overscrollBehaviorY;
+    const prevBodyOverscroll = body.style.overscrollBehaviorY;
+    const prevBodyOverflow = body.style.overflow;
+
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overscrollBehaviorY = prevHtmlOverscroll;
+      body.style.overscrollBehaviorY = prevBodyOverscroll;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     if (resolvedCurrentUserId && resolvedCurrentNickname) {
       return;
     }
@@ -312,6 +331,9 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         return;
       }
 
+      // Prevent browser-level page pull-down while custom feed pull-to-refresh is active.
+      event.preventDefault();
+
       const easedDistance = Math.min(
         PULL_TO_REFRESH_MAX_PX,
         rawDistance * PULL_TO_REFRESH_DRAG_RATIO,
@@ -414,7 +436,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         style={{
           flex: 1,
           overflowY: "auto",
-          overscrollBehaviorY: "contain",
+          overscrollBehaviorY: "none",
           padding: "16px 16px 100px",
           touchAction: "pan-y",
           WebkitOverflowScrolling: "touch",
