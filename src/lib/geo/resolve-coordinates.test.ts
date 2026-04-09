@@ -82,6 +82,30 @@ describe("resolveCoordinatesWithRef", () => {
     expect(getCurrentBrowserCoordinates).toHaveBeenCalledWith({ context: "like" });
   });
 
+  it("passes timeout when explicitly provided", async () => {
+    vi.mocked(getCurrentBrowserCoordinates).mockResolvedValue({
+      latitude: 37.58,
+      longitude: 127.05,
+    });
+    const coordsRef = { current: null as Coordinates | null };
+
+    const result = await resolveCoordinatesWithRef({
+      coordsRef,
+      context: "feed",
+      timeoutMs: 8_000,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      coords: { latitude: 37.58, longitude: 127.05 },
+      source: "browser",
+    });
+    expect(getCurrentBrowserCoordinates).toHaveBeenCalledWith({
+      context: "feed",
+      timeoutMs: 8_000,
+    });
+  });
+
   it("returns error and mapped message when browser request fails", async () => {
     const browserError = new Error("GEOLOCATION_PERMISSION_DENIED");
     vi.mocked(getCurrentBrowserCoordinates).mockRejectedValue(browserError);

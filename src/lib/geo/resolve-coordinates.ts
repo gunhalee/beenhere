@@ -29,6 +29,7 @@ type ResolveCoordinatesOptions = {
   coordsRef: CoordinatesRef;
   context?: GeoRequestContext;
   errorContext?: GeoErrorMessageContext;
+  timeoutMs?: number;
   allowRef?: boolean;
   allowCached?: boolean;
   allowCurrent?: boolean;
@@ -42,6 +43,7 @@ export async function resolveCoordinatesWithRef(
   const allowCurrent = options.allowCurrent ?? true;
   const context = options.context ?? "default";
   const errorContext = options.errorContext ?? "default";
+  const timeoutMs = options.timeoutMs;
 
   if (allowRef && options.coordsRef.current) {
     return {
@@ -73,7 +75,9 @@ export async function resolveCoordinatesWithRef(
   }
 
   try {
-    const currentCoords = await getCurrentBrowserCoordinates({ context });
+    const currentCoords = await getCurrentBrowserCoordinates(
+      timeoutMs === undefined ? { context } : { context, timeoutMs },
+    );
     options.coordsRef.current = currentCoords;
     return {
       ok: true,

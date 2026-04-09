@@ -35,6 +35,7 @@ export type FeedHookState = {
 
 const FEED_VISIBLE_POLL_INTERVAL_MS = 60_000;
 const FEED_VISIBLE_POLL_MAX_INTERVAL_MS = 5 * 60_000;
+const FEED_INITIAL_LOCATION_TIMEOUT_MS = 8_000;
 
 export function useFeed() {
   const [status, setStatus] = useState<FeedStatus>("idle");
@@ -143,6 +144,7 @@ export function useFeed() {
     const coordinateResult = await resolveCoordinatesWithRef({
       coordsRef,
       context: "feed",
+      timeoutMs: FEED_INITIAL_LOCATION_TIMEOUT_MS,
     });
 
     if (!mountedRef.current) return;
