@@ -31,7 +31,7 @@ export function ProfileLinkGoogleBanner({
           margin: 0,
         }}
       >
-        게스트 계정을 Google 계정과 연동하면 기기 변경 후에도 데이터가 유지됩니다.
+        계정을 Google 계정과 연동하면 데이터가 유지됩니다.
       </p>
       <button
         disabled={loading}
@@ -48,6 +48,7 @@ export function ProfileLinkGoogleBanner({
           fontWeight: 700,
           padding: "10px 12px",
           width: "fit-content",
+          alignSelf: "flex-end",
         }}
       >
         {loading ? "연동 준비 중..." : "Google 계정 연동"}

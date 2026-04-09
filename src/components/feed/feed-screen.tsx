@@ -105,7 +105,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   });
 
   const locationAvailable = !state.locationDenied;
-  const firstPlaceLabel = state.items[0]?.placeLabel ?? null;
   const pullOffset = pullRefreshing
     ? Math.max(pullDistance, PULL_TO_REFRESH_TRIGGER_PX)
     : pullDistance;
@@ -377,7 +376,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       }}
     >
       <FeedHeader
-        placeLabel={firstPlaceLabel}
         currentUserId={resolvedCurrentUserId}
         currentNickname={resolvedCurrentNickname}
         isAuthenticated={Boolean(resolvedCurrentUserId)}

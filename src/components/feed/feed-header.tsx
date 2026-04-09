@@ -1,14 +1,12 @@
 import Link from "next/link";
 
 type Props = {
-  placeLabel?: string | null;
   currentUserId?: string | null;
   currentNickname?: string | null;
   isAuthenticated?: boolean;
 };
 
 export function FeedHeader({
-  placeLabel,
   currentUserId,
   currentNickname,
   isAuthenticated = false,
@@ -34,7 +32,7 @@ export function FeedHeader({
       >
         <div
           style={{
-            alignItems: "baseline",
+            alignItems: "center",
             display: "flex",
             gap: "8px",
             minWidth: 0,
@@ -53,20 +51,6 @@ export function FeedHeader({
           >
             beenhere
           </h1>
-          {placeLabel ? (
-            <span
-              style={{
-                color: "#9ca3af",
-                fontSize: "12px",
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {placeLabel}
-            </span>
-          ) : null}
         </div>
 
         {currentUserId ? (
