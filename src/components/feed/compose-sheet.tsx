@@ -147,10 +147,7 @@ export function ComposeSheet({
                   margin: "0 0 2px",
                 }}
               >
-                이 장소에 글 남기기
-              </p>
-              <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0 }}>
-                {placeLabel}
+                이 장소에 글 남기기 · {placeLabel}
               </p>
             </div>
             <button
@@ -172,7 +169,7 @@ export function ComposeSheet({
                 width: "32px",
               }}
             >
-              ×
+              X
             </button>
           </div>
 

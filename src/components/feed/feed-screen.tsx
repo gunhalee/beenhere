@@ -378,7 +378,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     >
       <FeedHeader
         placeLabel={firstPlaceLabel}
-        currentUserId={resolvedHasProfile ? resolvedCurrentUserId : null}
+        currentUserId={resolvedCurrentUserId}
         currentNickname={resolvedCurrentNickname}
         isAuthenticated={Boolean(resolvedCurrentUserId)}
       />
