@@ -49,6 +49,7 @@ export function ProfileLikeItem({
           <PostCardMetaRow
             nickname={authorNickname}
             profileId={authorId}
+            disableProfileLink={authorId === likerId}
             placeLabel={placeLabel}
             distanceMeters={distanceMeters}
             relativeTime={relativeTime}
@@ -95,6 +96,7 @@ export function ProfileLikeItem({
               leadIn="Liked by "
               nickname={likerNickname}
               profileId={likerId}
+              disableProfileLink
               placeLabel={placeLabel}
               distanceMeters={distanceMeters}
               relativeTime={relativeTime}

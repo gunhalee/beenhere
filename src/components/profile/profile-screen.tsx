@@ -337,6 +337,8 @@ export function ProfileScreen({ userId }: Props) {
           <ProfilePostsTabContent
             state={posts}
             isMyProfile={isMyProfile}
+            profileId={userId}
+            profileNickname={nickname}
             currentUserId={currentUserId}
             expandedLikersId={expandedLikersId}
             likersMap={likersMap}

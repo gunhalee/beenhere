@@ -3,13 +3,12 @@ import { formatDistance } from "@/lib/geo/format-distance";
 
 type Props = {
   prefix?: string;
-  /** 닉네임 앞 일반 텍스트 (예: "Liked by ") */
   leadIn?: string;
   nickname: string;
   profileId: string;
-  placeLabel: string;
+  disableProfileLink?: boolean;
+  placeLabel?: string | null;
   relativeTime: string;
-  /** 없으면 거리 구간을 생략한다 (프로필 라이크 목록 등). */
   distanceMeters?: number | null;
 };
 
@@ -18,10 +17,12 @@ export function PostCardMetaRow({
   leadIn,
   nickname,
   profileId,
+  disableProfileLink = false,
   placeLabel,
   relativeTime,
   distanceMeters,
 }: Props) {
+  const normalizedPlaceLabel = placeLabel?.trim() || null;
   const hasDistance =
     distanceMeters != null && Number.isFinite(distanceMeters) && distanceMeters >= 0;
 
@@ -41,23 +42,25 @@ export function PostCardMetaRow({
       {leadIn ? (
         <span style={{ color: "#6b7280", fontWeight: 400 }}>{leadIn}</span>
       ) : null}
-      <Link
-        href={`/profile/${profileId}`}
-        onClick={(e) => e.stopPropagation()}
-        style={{ color: "#111827", fontWeight: 500, textDecoration: "none" }}
-      >
-        {nickname}
-      </Link>
+
+      {disableProfileLink ? (
+        <span style={{ color: "#111827", fontWeight: 500, textDecoration: "none" }}>
+          {nickname}
+        </span>
+      ) : (
+        <Link
+          href={`/profile/${profileId}`}
+          onClick={(event) => event.stopPropagation()}
+          style={{ color: "#111827", fontWeight: 500, textDecoration: "none" }}
+        >
+          {nickname}
+        </Link>
+      )}
+
       <span style={{ color: "#6b7280", fontWeight: 400 }}>
-        {" · "}
-        {placeLabel}
-        {hasDistance ? (
-          <>
-            {" · "}
-            {formatDistance(distanceMeters)}
-          </>
-        ) : null}
-        {" · "}
+        {" \u00B7 "}
+        {normalizedPlaceLabel ? `${normalizedPlaceLabel} \u00B7 ` : null}
+        {hasDistance ? `${formatDistance(distanceMeters)} \u00B7 ` : null}
         {relativeTime}
       </span>
     </p>

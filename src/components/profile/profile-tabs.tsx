@@ -17,6 +17,8 @@ import {
 type PostsTabProps = {
   state: ProfileListState<ProfilePostItem>;
   isMyProfile: boolean;
+  profileId: string;
+  profileNickname: string;
   currentUserId: string | null;
   expandedLikersId: string | null;
   likersMap: Record<string, ProfileLikersState | undefined>;
@@ -29,6 +31,8 @@ type PostsTabProps = {
 export function ProfilePostsTabContent({
   state,
   isMyProfile,
+  profileId,
+  profileNickname,
   currentUserId,
   expandedLikersId,
   likersMap,
@@ -50,6 +54,8 @@ export function ProfilePostsTabContent({
           key={item.postId}
           item={item}
           isMyProfile={isMyProfile}
+          profileId={profileId}
+          profileNickname={profileNickname}
           currentUserId={currentUserId}
           expandedLikersId={expandedLikersId}
           likersMap={likersMap}

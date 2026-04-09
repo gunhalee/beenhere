@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProfilePostItem, PostLikerItem } from "@/types/domain";
-import { formatDistance } from "@/lib/geo/format-distance";
+import { PostCardMetaRow } from "@/components/feed/post-card-meta-row";
 import { LikersList } from "./likers-list";
 import { ProfileCard } from "./profile-card";
 import { ProfileItemMenu } from "./profile-item-menu";
@@ -15,6 +15,8 @@ type LikersState = {
 type Props = {
   item: ProfilePostItem;
   isMyProfile: boolean;
+  profileId: string;
+  profileNickname: string;
   currentUserId: string | null;
   expandedLikersId: string | null;
   likersMap: Record<string, LikersState | undefined>;
@@ -26,6 +28,8 @@ type Props = {
 export function ProfilePostItem({
   item,
   isMyProfile,
+  profileId,
+  profileNickname,
   expandedLikersId,
   likersMap,
   onLikeCountClick,
@@ -35,8 +39,6 @@ export function ProfilePostItem({
   const { postId, content, placeLabel, distanceMeters, relativeTime, likeCount } = item;
   const isLikersExpanded = expandedLikersId === postId;
   const likersState = likersMap[postId];
-  const hasDistance =
-    distanceMeters != null && Number.isFinite(distanceMeters) && distanceMeters >= 0;
 
   const menuActions = isMyProfile
     ? [
@@ -67,24 +69,16 @@ export function ProfilePostItem({
           marginBottom: "10px",
         }}
       >
-        <p
-          style={{
-            color: "#9ca3af",
-            flex: 1,
-            fontSize: "11px",
-            margin: 0,
-          }}
-        >
-          {placeLabel ? <span style={{ color: "#111827", fontWeight: 500 }}>{placeLabel}</span> : null}
-          {hasDistance ? (
-            <span>
-              {placeLabel ? " / " : null}
-              {formatDistance(distanceMeters as number)}
-            </span>
-          ) : null}
-          {placeLabel || hasDistance ? " / " : null}
-          {relativeTime}
-        </p>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <PostCardMetaRow
+            nickname={profileNickname}
+            profileId={profileId}
+            disableProfileLink
+            placeLabel={placeLabel}
+            distanceMeters={distanceMeters}
+            relativeTime={relativeTime}
+          />
+        </div>
 
         <ProfileItemMenu actions={menuActions} />
       </div>
