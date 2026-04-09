@@ -8,18 +8,22 @@ import {
 } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import {
+  getCachedBrowserCoordinates,
   getCurrentBrowserCoordinates,
-  isGeoPermissionDenied,
+  getGeoErrorMessage,
 } from "@/lib/geo/browser-location";
 import {
   getGeocodingErrorMessage,
-  resolvePlaceLabel,
 } from "@/lib/geo/reverse-geocode";
+import { resolvePlaceLabelWithCache } from "@/lib/geo/place-label-cache";
 import {
   likePostClient,
   deletePostClient,
   reportPostClient,
 } from "@/lib/api/feed-client";
+import type { RemovedItemSnapshot } from "./optimistic-removal";
+
+export type { RemovedItemSnapshot } from "./optimistic-removal";
 
 export type LikeablePostItem = {
   postId: string;
@@ -28,11 +32,13 @@ export type LikeablePostItem = {
   placeLabel?: string | null;
 };
 
-type Actions<TItem extends LikeablePostItem> = {
+type Actions<TItem extends LikeablePostItem, TRemovedItem> = {
   updateItem: (postId: string, patch: Partial<TItem>) => void;
-  removeItem: (postId: string) => void;
+  removeItemOptimistic: (postId: string) => RemovedItemSnapshot<TRemovedItem> | null;
+  restoreRemovedItem: (snapshot: RemovedItemSnapshot<TRemovedItem>) => void;
   coordsRef: RefObject<Coordinates | null>;
   onLocationError?: (message: string) => void;
+  onActionError?: (message: string) => void;
 };
 
 export type ReportState = {
@@ -42,18 +48,19 @@ export type ReportState = {
   successMessage: string | null;
 };
 
-export function usePostActions<TItem extends LikeablePostItem>({
+export function usePostActions<
+  TItem extends LikeablePostItem,
+  TRemovedItem = TItem,
+>({
   updateItem,
-  removeItem,
+  removeItemOptimistic,
+  restoreRemovedItem,
   coordsRef,
   onLocationError,
-}: Actions<TItem>) {
+  onActionError,
+}: Actions<TItem, TRemovedItem>) {
   const likePendingRef = useRef<Set<string>>(new Set());
-  const placeLabelCacheRef = useRef<{
-    latitude: number;
-    longitude: number;
-    placeLabel: string;
-  } | null>(null);
+  const deletePendingRef = useRef<Set<string>>(new Set());
 
   const [reportState, setReportState] = useState<ReportState>({
     postId: null,
@@ -65,14 +72,18 @@ export function usePostActions<TItem extends LikeablePostItem>({
   const resolveCoordinates = useCallback(async (): Promise<Coordinates | null> => {
     if (coordsRef.current) return coordsRef.current;
 
+    const cached = getCachedBrowserCoordinates();
+    if (cached) {
+      coordsRef.current = cached;
+      return cached;
+    }
+
     try {
-      const coords = await getCurrentBrowserCoordinates();
+      const coords = await getCurrentBrowserCoordinates({ context: "like" });
       coordsRef.current = coords;
       return coords;
     } catch (error) {
-      const message = isGeoPermissionDenied(error)
-        ? "위치 권한을 허용해야 라이크를 남길 수 있어요."
-        : "현재 위치를 확인하지 못했어요. 다시 시도해 주세요.";
+      const message = getGeoErrorMessage(error, "like");
       onLocationError?.(message);
       return null;
     }
@@ -80,23 +91,8 @@ export function usePostActions<TItem extends LikeablePostItem>({
 
   const resolveLikePlaceLabel = useCallback(
     async (coords: Coordinates, fallbackLabel?: string | null) => {
-      const cache = placeLabelCacheRef.current;
-      if (
-        cache &&
-        cache.latitude === coords.latitude &&
-        cache.longitude === coords.longitude
-      ) {
-        return cache.placeLabel;
-      }
-
       try {
-        const placeLabel = await resolvePlaceLabel(coords);
-        placeLabelCacheRef.current = {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          placeLabel,
-        };
-        return placeLabel;
+        return await resolvePlaceLabelWithCache(coords);
       } catch (error) {
         onLocationError?.(getGeocodingErrorMessage(error));
         return fallbackLabel?.trim() || "현재 위치";
@@ -110,11 +106,15 @@ export function usePostActions<TItem extends LikeablePostItem>({
       if (item.myLike) return;
       if (likePendingRef.current.has(item.postId)) return;
 
+      likePendingRef.current.add(item.postId);
+
       const coords = await resolveCoordinates();
-      if (!coords) return;
+      if (!coords) {
+        likePendingRef.current.delete(item.postId);
+        return;
+      }
 
       const placeLabel = await resolveLikePlaceLabel(coords, item.placeLabel);
-      likePendingRef.current.add(item.postId);
 
       updateItem(item.postId, {
         myLike: true,
@@ -134,6 +134,7 @@ export function usePostActions<TItem extends LikeablePostItem>({
           myLike: false,
           likeCount: item.likeCount,
         } as Partial<TItem>);
+        onActionError?.(result.error ?? "라이크를 처리하지 못했어요. 다시 시도해 주세요.");
         return;
       }
 
@@ -141,18 +142,26 @@ export function usePostActions<TItem extends LikeablePostItem>({
         likeCount: result.data.likeCount,
       } as Partial<TItem>);
     },
-    [resolveCoordinates, resolveLikePlaceLabel, updateItem],
+    [onActionError, resolveCoordinates, resolveLikePlaceLabel, updateItem],
   );
 
   const handleDelete = useCallback(
     async (postId: string) => {
-      removeItem(postId);
+      if (deletePendingRef.current.has(postId)) return;
+      const snapshot = removeItemOptimistic(postId);
+      if (!snapshot) return;
+
+      deletePendingRef.current.add(postId);
       const result = await deletePostClient(postId);
+
+      deletePendingRef.current.delete(postId);
       if (!result.ok) {
+        restoreRemovedItem(snapshot);
+        onActionError?.(result.error ?? "삭제를 완료하지 못했어요. 다시 시도해 주세요.");
         console.error("[usePostActions] post delete failed:", result.error);
       }
     },
-    [removeItem],
+    [onActionError, removeItemOptimistic, restoreRemovedItem],
   );
 
   const openReport = useCallback((postId: string) => {

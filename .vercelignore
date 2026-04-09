@@ -1,0 +1,24 @@
+# Vercel upload excludes (production deployment)
+
+# Local/build artifacts
+.next
+node_modules
+*.tsbuildinfo
+
+# CI/editor metadata
+.github
+.vscode
+
+# Test assets
+e2e
+src/**/*.test.ts
+src/**/*.test.tsx
+playwright.config.ts
+vitest.config.ts
+vitest.setup.ts
+
+# Local infra/docs not required for runtime
+supabase
+beenhere_prd.md
+beenhere_prd_preprint.md
+llm_maintenance_guide.md

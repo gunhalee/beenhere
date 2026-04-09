@@ -10,6 +10,7 @@
  */
 
 import { fetchApi } from "@/lib/api/client";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import type { Coordinates } from "./browser-location";
 
 type ReverseGeocodeResponse = { placeLabel: string };
@@ -30,13 +31,14 @@ export async function resolvePlaceLabel(coords: Coordinates): Promise<string> {
   const result = await fetchApi<ReverseGeocodeResponse>(
     `/api/geo/reverse?${params.toString()}`,
     {
-      timeoutMs: 8000,
+      timeoutMs: 2500,
       timeoutErrorMessage: "위치 확인이 지연되고 있어요. 다시 시도해 주세요.",
+      timeoutCode: API_ERROR_CODE.GEOCODE_TIMEOUT,
     },
   );
 
   if (!result.ok) {
-    const code = result.code ?? "GEOCODE_ERROR";
+    const code = result.code ?? API_ERROR_CODE.GEOCODE_ERROR;
     throw Object.assign(
       new Error(result.error ?? "지역 정보를 가져오지 못했어요."),
       { code },
@@ -57,19 +59,19 @@ export function getGeocodingErrorMessage(error: unknown): string {
   const code = (error as Error & { code?: string }).code;
 
   switch (code) {
-    case "GEOCODE_TIMEOUT":
+    case API_ERROR_CODE.GEOCODE_TIMEOUT:
       return "위치 확인 시간이 초과됐어요. 다시 시도해 주세요.";
-    case "GEOCODE_FAILED":
+    case API_ERROR_CODE.GEOCODE_FAILED:
       return "이 위치의 지역 정보를 찾지 못했어요.";
-    case "GEOCODE_NOT_CONFIGURED":
+    case API_ERROR_CODE.GEOCODE_NOT_CONFIGURED:
       return "위치 서비스 설정이 아직 완료되지 않았어요.";
-    case "GEOCODE_AUTH_FAILED":
+    case API_ERROR_CODE.GEOCODE_AUTH_FAILED:
       return "위치 서비스 인증에 실패했어요. 잠시 후 다시 시도해 주세요.";
-    case "GEOCODE_RATE_LIMITED":
+    case API_ERROR_CODE.GEOCODE_RATE_LIMITED:
       return "위치 요청이 많아요. 잠시 후 다시 시도해 주세요.";
-    case "TIMEOUT":
+    case API_ERROR_CODE.TIMEOUT:
       return "요청 시간이 초과됐어요. 다시 시도해 주세요.";
-    case "NETWORK_ERROR":
+    case API_ERROR_CODE.NETWORK_ERROR:
       return "네트워크 연결을 확인해 주세요.";
     default:
       return "지역 정보를 가져오지 못했어요. 다시 시도해 주세요.";

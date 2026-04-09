@@ -2,17 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
-import { resolvePlaceLabel } from "@/lib/geo/reverse-geocode";
+import { resolvePlaceLabelWithCache } from "@/lib/geo/place-label-cache";
 import { createPostClient } from "@/lib/api/feed-client";
 import type { FeedItem } from "@/types/domain";
+import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 
 const MAX_CHARS = 300;
 
 type ComposeStatus =
-  | "resolving"   // placeLabel 역지오코딩 중
-  | "ready"       // 작성 가능
-  | "submitting"  // 제출 중
-  | "error";      // 에러
+  | "ready"
+  | "submitting"
+  | "error";
 
 type Props = {
   coords: Coordinates;
@@ -29,38 +29,26 @@ export function ComposeSheet({
   onSuccess,
   onDismiss,
 }: Props) {
-  const [status, setStatus] = useState<ComposeStatus>("resolving");
-  const [placeLabel, setPlaceLabel] = useState<string>("");
+  const [status, setStatus] = useState<ComposeStatus>("ready");
+  const [placeLabel, setPlaceLabel] = useState<string>("현재 위치");
   const [content, setContent] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useMountedRef();
 
+  // 시트는 즉시 편집 가능하게 열고, 장소 라벨은 백그라운드로 갱신한다.
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+    setTimeout(() => textareaRef.current?.focus(), 100);
 
-  // 마운트 시 역지오코딩 실행
-  useEffect(() => {
-    resolvePlaceLabel(coords)
+    resolvePlaceLabelWithCache(coords)
       .then((label) => {
         if (!mountedRef.current) return;
         setPlaceLabel(label);
-        setStatus("ready");
-        // 포커스
-        setTimeout(() => textareaRef.current?.focus(), 100);
       })
       .catch(() => {
-        if (!mountedRef.current) return;
-        // 역지오코딩 실패해도 작성은 가능하게 처리 (기본 라벨 사용)
-        setPlaceLabel("현재 위치");
-        setStatus("ready");
-        setTimeout(() => textareaRef.current?.focus(), 100);
+        // fallback("현재 위치")로 계속 작성 가능
       });
-  }, [coords]);
+  }, [coords, mountedRef]);
 
   async function handleSubmit() {
     const trimmed = content.trim();
@@ -84,7 +72,6 @@ export function ComposeSheet({
       return;
     }
 
-    // 낙관적 피드 아이템 구성
     const newItem: FeedItem = {
       postId: result.data.postId,
       content: trimmed,
@@ -108,7 +95,6 @@ export function ComposeSheet({
 
   return (
     <>
-      {/* 오버레이 */}
       <div
         className="compose-sheet-overlay"
         onClick={(e) => {
@@ -122,7 +108,6 @@ export function ComposeSheet({
           type="button"
         />
 
-        {/* 시트 패널 */}
         <div
           className="compose-sheet-panel"
           style={{
@@ -135,7 +120,6 @@ export function ComposeSheet({
             zIndex: 13,
           }}
         >
-          {/* 핸들 */}
           <div
             style={{
               background: "#e5e7eb",
@@ -146,7 +130,6 @@ export function ComposeSheet({
             }}
           />
 
-          {/* 헤더 */}
           <div
             style={{
               alignItems: "center",
@@ -167,7 +150,7 @@ export function ComposeSheet({
                 이 장소에 글 남기기
               </p>
               <p style={{ color: "#9ca3af", fontSize: "12px", margin: 0 }}>
-                {status === "resolving" ? "위치 확인 중…" : placeLabel}
+                {placeLabel}
               </p>
             </div>
             <button
@@ -193,10 +176,9 @@ export function ComposeSheet({
             </button>
           </div>
 
-          {/* 텍스트 영역 */}
           <textarea
             ref={textareaRef}
-            disabled={status === "resolving" || status === "submitting"}
+            disabled={status === "submitting"}
             maxLength={MAX_CHARS + 10}
             onChange={(e) => {
               setContent(e.target.value);
@@ -220,7 +202,6 @@ export function ComposeSheet({
             }}
           />
 
-          {/* 글자 수 + 에러 */}
           <div
             style={{
               alignItems: "center",
@@ -243,7 +224,6 @@ export function ComposeSheet({
             </span>
           </div>
 
-          {/* 제출 버튼 */}
           <button
             disabled={!canSubmit}
             onClick={handleSubmit}

@@ -1,12 +1,14 @@
 import type { ProfilePostRow, ProfileLikeRow, PostLikerRow } from "@/types/db";
 import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { encodeCursor, decodeCursor } from "@/lib/utils/cursor";
 import {
   generateNickname,
   canRegenerateNickname,
+  daysUntilNicknameRegen,
   NICKNAME_COOLDOWN_DAYS,
 } from "@/lib/nickname/generate";
 
@@ -72,7 +74,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 // ---------------------------
 
 type RegenerateNicknameResult =
-  | { ok: true; nickname: string }
+  | { ok: true; nickname: string; nicknameChangedAt: string }
   | { ok: false; code: string; message: string; daysRemaining?: number };
 
 export async function regenerateNicknameRepository(
@@ -80,42 +82,49 @@ export async function regenerateNicknameRepository(
   nicknameChangedAt: string | null,
 ): Promise<RegenerateNicknameResult> {
   if (!canRegenerateNickname(nicknameChangedAt)) {
-    const lastChanged = new Date(nicknameChangedAt!).getTime();
-    const cooldownMs = NICKNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
-    const remainingMs = cooldownMs - (Date.now() - lastChanged);
-    const daysRemaining = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+    const daysRemaining = daysUntilNicknameRegen(nicknameChangedAt);
 
     return {
       ok: false,
-      code: "COOLDOWN_ACTIVE",
+      code: API_ERROR_CODE.COOLDOWN_ACTIVE,
       message: `닉네임은 ${NICKNAME_COOLDOWN_DAYS}일에 1회 변경할 수 있어요.`,
       daysRemaining,
     };
   }
 
   const newNickname = generateNickname();
+  const changedAt = new Date().toISOString();
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
     .from("profiles")
-    .update({ nickname: newNickname, nickname_changed_at: new Date().toISOString() })
+    .update({ nickname: newNickname, nickname_changed_at: changedAt })
     .eq("id", userId);
 
   if (error) {
     if (error.code === "23505") {
       // 중복 닉네임 극히 드문 경우 — 재시도
       const retry = generateNickname();
+      const retryChangedAt = new Date().toISOString();
       const { error: retryError } = await supabase
         .from("profiles")
-        .update({ nickname: retry, nickname_changed_at: new Date().toISOString() })
+        .update({ nickname: retry, nickname_changed_at: retryChangedAt })
         .eq("id", userId);
       if (retryError) throw retryError;
-      return { ok: true, nickname: formatNicknameForDisplay(retry) };
+      return {
+        ok: true,
+        nickname: formatNicknameForDisplay(retry),
+        nicknameChangedAt: retryChangedAt,
+      };
     }
     throw error;
   }
 
-  return { ok: true, nickname: formatNicknameForDisplay(newNickname) };
+  return {
+    ok: true,
+    nickname: formatNicknameForDisplay(newNickname),
+    nicknameChangedAt: changedAt,
+  };
 }
 
 // ---------------------------

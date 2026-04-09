@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasSupabaseServerConfig } from "@/lib/supabase/config";
+import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 
 /**
  * Google OAuth 콜백 처리.
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
   }
 
-  if (!hasSupabaseServerConfig()) {
+  if (!hasSupabaseBrowserConfig()) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 

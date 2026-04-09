@@ -8,7 +8,8 @@ import type { FeedItem, ProfileLikeItem, ProfilePostItem, PostLikerItem } from '
 // 공통 API 응답 래퍼
 // ---------------------------
 export type ApiOk<T>  = { ok: true;  data: T };
-export type ApiErr    = { ok: false; error: string; code?: string };
+export type ApiErrorDetails = Record<string, unknown>;
+export type ApiErr    = { ok: false; error: string; code?: string; details?: ApiErrorDetails };
 export type ApiResult<T> = ApiOk<T> | ApiErr;
 
 // ---------------------------
@@ -62,6 +63,15 @@ export type NearbyFeedQuery = {
 export type NearbyFeedResponse = ApiResult<{
   items:      FeedItem[];
   nextCursor: string | null;  // base64url encoded FeedCursor
+  stateVersion: string | null;
+}>;
+
+// ---------------------------
+// GET /api/feed/state
+// ---------------------------
+export type FeedStateResponse = ApiResult<{
+  stateVersion: string;
+  refreshedAt: string;
 }>;
 
 // ---------------------------
@@ -77,6 +87,12 @@ export type GetMyProfileResponse = ApiResult<{
   id:                 string;
   nickname:           string;
   nicknameChangedAt:  string | null;
+}>;
+
+// PATCH /api/profiles/me (닉네임 재생성)
+export type RegenerateMyNicknameResponse = ApiResult<{
+  nickname: string;
+  nicknameChangedAt: string;
 }>;
 
 // ---------------------------
@@ -118,3 +134,32 @@ export type CreateBlockResponse = ApiResult<{ blocked: true }>;
 // DELETE /api/blocks/:userId
 // ---------------------------
 export type DeleteBlockResponse = ApiResult<{ unblocked: true }>;
+
+// ---------------------------
+// GET /api/internal/moderation/reports
+// ---------------------------
+export type ModerationReportItem = {
+  reportId: string;
+  postId: string;
+  reporterId: string;
+  reporterNickname: string | null;
+  reasonCode: string;
+  reportedAt: string;
+  postStatus: "active" | "deleted" | "hidden" | null;
+  postAuthorId: string | null;
+  postContent: string | null;
+};
+
+export type InternalModerationReportsResponse = ApiResult<{
+  items: ModerationReportItem[];
+}>;
+
+// ---------------------------
+// POST /api/internal/moderation/reports/:reportId/hide
+// ---------------------------
+export type InternalModerationHideResponse = ApiResult<{
+  reportId: string;
+  postId: string;
+  hidden: boolean;
+  alreadyHidden: boolean;
+}>;

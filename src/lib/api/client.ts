@@ -1,4 +1,5 @@
 import type { ApiResult } from "@/types/api";
+import { API_ERROR_CODE } from "./common-errors";
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -7,6 +8,7 @@ type FetchOptions = {
   body?: unknown;
   timeoutMs?: number;
   timeoutErrorMessage?: string;
+  timeoutCode?: string;
 };
 
 /**
@@ -24,6 +26,7 @@ export async function fetchApi<T>(
     body,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     timeoutErrorMessage = "요청 시간이 초과됐습니다.",
+    timeoutCode = API_ERROR_CODE.TIMEOUT,
   } = options;
 
   const controller = new AbortController();
@@ -41,13 +44,13 @@ export async function fetchApi<T>(
     return json;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      return { ok: false, error: timeoutErrorMessage, code: "TIMEOUT" };
+      return { ok: false, error: timeoutErrorMessage, code: timeoutCode };
     }
 
     return {
       ok: false,
       error: error instanceof Error ? error.message : "알 수 없는 오류",
-      code: "NETWORK_ERROR",
+      code: API_ERROR_CODE.NETWORK_ERROR,
     };
   } finally {
     clearTimeout(timer);

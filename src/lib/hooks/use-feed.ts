@@ -3,11 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/types/domain";
 import {
+  getCachedBrowserCoordinates,
   getCurrentBrowserCoordinates,
+  getGeoErrorMessage,
   isGeoPermissionDenied,
   type Coordinates,
 } from "@/lib/geo/browser-location";
-import { fetchNearbyFeed } from "@/lib/api/feed-client";
+import { fetchFeedState, fetchNearbyFeed } from "@/lib/api/feed-client";
+import {
+  usePaginatedList,
+  type PaginatedFetchResult,
+} from "./use-paginated-list";
+import { useMountedRef } from "./use-mounted-ref";
+import { useVisiblePolling } from "./use-visible-polling";
+import {
+  getRemovedItemSnapshot,
+  removeItemById,
+  restoreRemovedItemInList,
+  type RemovedItemSnapshot,
+} from "./optimistic-removal";
 
 // ---------------------------
 // 타입
@@ -29,171 +43,227 @@ export type FeedHookState = {
   locationDenied: boolean;
 };
 
-const INITIAL_STATE: FeedHookState = {
-  status: "idle",
-  items: [],
-  nextCursor: null,
-  loadingMore: false,
-  errorMessage: null,
-  locationDenied: false,
-};
+const FEED_VISIBLE_POLL_INTERVAL_MS = 60_000;
+const FEED_VISIBLE_POLL_MAX_INTERVAL_MS = 5 * 60_000;
 
 // ---------------------------
 // 훅
 // ---------------------------
 
 export function useFeed() {
-  const [state, setState] = useState<FeedHookState>(INITIAL_STATE);
+  const [status, setStatus] = useState<FeedStatus>("idle");
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [locationErrorMessage, setLocationErrorMessage] = useState<string | null>(
+    null,
+  );
+
   const coordsRef = useRef<Coordinates | null>(null);
-  const mountedRef = useRef(true);
-  const loadingMoreRef = useRef(false);
+  const feedStateVersionRef = useRef<string | null>(null);
+  const mountedRef = useMountedRef();
 
-  // 피드 로드 (초기 또는 새로고침)
-  const loadFeed = useCallback(async (coords: Coordinates) => {
-    if (!mountedRef.current) return;
-    setState((s) => ({
-      ...s,
-      status: "loading",
-      errorMessage: null,
-      locationDenied: false,
-    }));
-
-    const result = await fetchNearbyFeed({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-    });
-
-    if (!mountedRef.current) return;
-
-    if (!result.ok) {
-      setState((s) => ({
-        ...s,
-        status: "error",
-        errorMessage: result.error ?? "피드를 불러오지 못했어요.",
-      }));
-      return;
-    }
-
-    setState((s) => ({
-      ...s,
-      status: "success",
-      items: result.data.items,
-      nextCursor: result.data.nextCursor,
-    }));
-  }, []);
-
-  // 초기화: 위치 요청 → 피드 로드
-  const initFeed = useCallback(async () => {
-    if (!mountedRef.current) return;
-    setState((s) => ({ ...s, status: "locating", locationDenied: false }));
-
-    try {
-      const coords = await getCurrentBrowserCoordinates();
-      if (!mountedRef.current) return;
-      coordsRef.current = coords;
-      await loadFeed(coords);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      if (isGeoPermissionDenied(err)) {
-        setState((s) => ({
-          ...s,
-          status: "error",
-          locationDenied: true,
-          errorMessage: null,
-        }));
-      } else {
-        setState((s) => ({
-          ...s,
-          status: "error",
-          locationDenied: false,
-          errorMessage:
-            err instanceof Error
-              ? "현재 위치를 확인하지 못했어요. 다시 시도해 주세요."
-              : "알 수 없는 오류가 발생했어요.",
-        }));
-      }
-    }
-  }, [loadFeed]);
-
-  // 마운트 시 초기화
-  useEffect(() => {
-    mountedRef.current = true;
-    initFeed();
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [initFeed]);
-
-  // 더 보기 (커서 페이지네이션)
-  const loadMore = useCallback(async () => {
-    const coords = coordsRef.current;
-    if (!coords || loadingMoreRef.current) return;
-
-    setState((prev) => {
-      if (!prev.nextCursor) return prev;
-      loadingMoreRef.current = true;
-      return { ...prev, loadingMore: true };
-    });
-
-    // 현재 커서를 ref에서 읽기 위해 setState 콜백 사용
-    setState((prev) => {
-      if (!prev.nextCursor) {
-        loadingMoreRef.current = false;
-        return { ...prev, loadingMore: false };
+  const fetchFeedPage = useCallback(
+    async (cursor?: string): Promise<PaginatedFetchResult<FeedItem>> => {
+      const coords = coordsRef.current;
+      if (!coords) {
+        return {
+          ok: false,
+          error: getGeoErrorMessage(new Error("GEOLOCATION_UNAVAILABLE")),
+        };
       }
 
-      const cursor = prev.nextCursor;
-
-      fetchNearbyFeed({
+      const result = await fetchNearbyFeed({
         latitude: coords.latitude,
         longitude: coords.longitude,
         cursor,
-      }).then((result) => {
-        if (!mountedRef.current) return;
-        loadingMoreRef.current = false;
-
-        if (!result.ok) {
-          setState((s) => ({ ...s, loadingMore: false }));
-          return;
-        }
-
-        setState((s) => ({
-          ...s,
-          items: [...s.items, ...result.data.items],
-          nextCursor: result.data.nextCursor,
-          loadingMore: false,
-        }));
       });
 
-      return prev;
-    });
-  }, []);
+      if (!result.ok) {
+        return { ok: false, error: result.error };
+      }
 
-  // 아이템 낙관적 업데이트
-  const updateItem = useCallback(
-    (postId: string, patch: Partial<FeedItem>) => {
-      setState((s) => ({
-        ...s,
-        items: s.items.map((item) =>
-          item.postId === postId ? { ...item, ...patch } : item,
-        ),
-      }));
+      if (result.data.stateVersion) {
+        feedStateVersionRef.current = result.data.stateVersion;
+      }
+
+      return { ok: true, data: result.data };
     },
     [],
   );
 
-  // 아이템 제거 (삭제 후)
-  const removeItem = useCallback((postId: string) => {
-    setState((s) => ({
-      ...s,
-      items: s.items.filter((item) => item.postId !== postId),
-    }));
-  }, []);
+  const {
+    state: feedListState,
+    load: loadFirstPage,
+    loadMore: loadMorePage,
+    mutateItems,
+    prependItem,
+  } = usePaginatedList<FeedItem>({
+    fetchPage: fetchFeedPage,
+    defaultErrorMessage: "피드를 불러오지 못했어요.",
+    initialLoading: false,
+  });
 
-  // 피드 최상단에 아이템 추가 (글 작성 후)
-  const prependItem = useCallback((item: FeedItem) => {
-    setState((s) => ({ ...s, items: [item, ...s.items] }));
-  }, []);
+  // 피드 로드 (초기 또는 새로고침)
+  const loadFeed = useCallback(
+    async (coords: Coordinates, options?: { silent?: boolean }) => {
+      if (!mountedRef.current) return false;
+      const silent = options?.silent ?? false;
+
+      coordsRef.current = coords;
+      if (!silent) {
+        setStatus("loading");
+        setLocationDenied(false);
+        setLocationErrorMessage(null);
+      }
+
+      const ok = await loadFirstPage();
+
+      if (!mountedRef.current) return false;
+
+      if (silent) {
+        if (ok) {
+          setStatus("success");
+          setLocationDenied(false);
+          setLocationErrorMessage(null);
+          return true;
+        }
+
+        setStatus((prev) => (prev === "success" ? "success" : "error"));
+        return false;
+      }
+
+      setStatus(ok ? "success" : "error");
+      return ok;
+    },
+    [loadFirstPage],
+  );
+
+  const refreshFeedFromBrowserCoordinates = useCallback(async () => {
+    try {
+      const coords = await getCurrentBrowserCoordinates({ context: "feed" });
+      if (!mountedRef.current) return;
+      await loadFeed(coords, { silent: true });
+    } catch {
+      // 백그라운드 위치 갱신 실패는 사용자 흐름을 막지 않는다.
+    }
+  }, [loadFeed, mountedRef]);
+
+  // 초기화: 위치 요청 -> 피드 로드
+  const initFeed = useCallback(async () => {
+    if (!mountedRef.current) return;
+    setStatus("locating");
+    setLocationDenied(false);
+    setLocationErrorMessage(null);
+
+    const cachedCoords = getCachedBrowserCoordinates();
+    if (cachedCoords) {
+      await loadFeed(cachedCoords);
+      if (!mountedRef.current) return;
+      void refreshFeedFromBrowserCoordinates();
+      return;
+    }
+
+    try {
+      const coords = await getCurrentBrowserCoordinates({ context: "feed" });
+      if (!mountedRef.current) return;
+      await loadFeed(coords);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      if (isGeoPermissionDenied(err)) {
+        setStatus("error");
+        setLocationDenied(true);
+        setLocationErrorMessage(null);
+      } else {
+        setStatus("error");
+        setLocationDenied(false);
+        setLocationErrorMessage(getGeoErrorMessage(err));
+      }
+    }
+  }, [loadFeed, refreshFeedFromBrowserCoordinates, mountedRef]);
+
+  // 마운트 시 초기화
+  useEffect(() => {
+    void initFeed();
+  }, [initFeed]);
+
+  useVisiblePolling({
+    enabled: Boolean(coordsRef.current) && !locationDenied,
+    intervalMs: FEED_VISIBLE_POLL_INTERVAL_MS,
+    maxIntervalMs: FEED_VISIBLE_POLL_MAX_INTERVAL_MS,
+    label: "feed_refresh",
+    runImmediately: false,
+    onTick: async (isCancelled) => {
+      if (isCancelled()) return;
+      if (status === "loading" || status === "locating" || feedListState.loadingMore) {
+        return;
+      }
+
+      const coords = coordsRef.current;
+      if (!coords) return;
+
+      const stateResult = await fetchFeedState();
+      if (!stateResult.ok) return;
+
+      const latestStateVersion = stateResult.data.stateVersion;
+      const previousStateVersion = feedStateVersionRef.current;
+
+      if (!previousStateVersion) {
+        feedStateVersionRef.current = latestStateVersion;
+        return;
+      }
+
+      if (previousStateVersion === latestStateVersion) {
+        return;
+      }
+
+      const refreshed = await loadFeed(coords, { silent: true });
+      if (refreshed) {
+        feedStateVersionRef.current = latestStateVersion;
+      }
+    },
+  });
+
+  // 더 보기 (커서 페이지네이션)
+  const loadMore = useCallback(async () => {
+    if (!coordsRef.current) return;
+    await loadMorePage();
+  }, [loadMorePage]);
+
+  // 아이템 낙관적 업데이트
+  const updateItem = useCallback(
+    (postId: string, patch: Partial<FeedItem>) => {
+      mutateItems((items) =>
+        items.map((item) =>
+          item.postId === postId ? { ...item, ...patch } : item,
+        ),
+      );
+    },
+    [mutateItems],
+  );
+
+  const removeItemOptimistic = useCallback(
+    (postId: string) => {
+      const snapshot = getRemovedItemSnapshot(
+        feedListState.items,
+        postId,
+        (item) => item.postId,
+      );
+      if (!snapshot) return null;
+
+      mutateItems((items) => removeItemById(items, postId, (item) => item.postId));
+
+      return snapshot;
+    },
+    [feedListState.items, mutateItems],
+  );
+
+  const restoreRemovedItem = useCallback(
+    (snapshot: RemovedItemSnapshot<FeedItem>) => {
+      mutateItems((items) =>
+        restoreRemovedItemInList(items, snapshot, (item) => item.postId),
+      );
+    },
+    [mutateItems],
+  );
 
   const refresh = useCallback(async () => {
     if (coordsRef.current) {
@@ -203,13 +273,23 @@ export function useFeed() {
     }
   }, [loadFeed, initFeed]);
 
+  const state: FeedHookState = {
+    status,
+    items: feedListState.items,
+    nextCursor: feedListState.nextCursor,
+    loadingMore: feedListState.loadingMore,
+    errorMessage: locationErrorMessage ?? feedListState.errorMessage,
+    locationDenied,
+  };
+
   return {
     state,
     coordsRef,
     refresh,
     loadMore,
     updateItem,
-    removeItem,
+    removeItemOptimistic,
+    restoreRemovedItem,
     prependItem,
     requestLocation: initFeed,
   };

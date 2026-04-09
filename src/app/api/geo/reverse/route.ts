@@ -9,6 +9,8 @@
  * 반환 예: { placeLabel: "마포구" } | { placeLabel: "해운대구" } | { placeLabel: "제주시" }
  */
 import { fail, ok } from "@/lib/api/response";
+import { parseCoordinatesFromSearchParams } from "@/lib/api/coordinates";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 
 const KAKAO_COORD2REGION_URL =
   "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
@@ -65,22 +67,24 @@ function extractPlaceLabel(region: {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const lat = parseFloat(searchParams.get("lat") ?? "");
-  const lng = parseFloat(searchParams.get("lng") ?? "");
+  const coordinateResult = parseCoordinatesFromSearchParams(searchParams, {
+    latitudeKeys: ["lat"],
+    longitudeKeys: ["lng"],
+    invalidMessage: "유효한 좌표가 필요해요.",
+    outOfRangeMessage: "좌표 범위를 확인해 주세요.",
+  });
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return fail("유효한 좌표가 필요해요.", 400, "INVALID_LOCATION");
+  if (!coordinateResult.ok) {
+    return fail(coordinateResult.message, 400, coordinateResult.code);
   }
 
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    return fail("좌표 범위를 확인해 주세요.", 400, "INVALID_LOCATION");
-  }
+  const { latitude: lat, longitude: lng } = coordinateResult.data;
 
   if (!KAKAO_REST_API_KEY) {
     return fail(
       "서버 설정에 카카오 REST API 키가 없어요.",
       500,
-      "GEOCODE_NOT_CONFIGURED",
+      API_ERROR_CODE.GEOCODE_NOT_CONFIGURED,
     );
   }
 
@@ -109,7 +113,7 @@ export async function GET(request: Request) {
       return fail(
         "역지오코딩 인증에 실패했어요. 서버 키 설정을 확인해 주세요.",
         502,
-        "GEOCODE_AUTH_FAILED",
+        API_ERROR_CODE.GEOCODE_AUTH_FAILED,
       );
     }
 
@@ -117,7 +121,7 @@ export async function GET(request: Request) {
       return fail(
         "위치 요청이 많아요. 잠시 후 다시 시도해 주세요.",
         429,
-        "GEOCODE_RATE_LIMITED",
+        API_ERROR_CODE.GEOCODE_RATE_LIMITED,
       );
     }
 
@@ -129,13 +133,21 @@ export async function GET(request: Request) {
     const primaryRegion = pickPrimaryRegion(json.documents ?? []);
 
     if (!primaryRegion) {
-      return fail("이 좌표의 지역 정보를 찾지 못했어요.", 422, "GEOCODE_FAILED");
+      return fail(
+        "이 좌표의 지역 정보를 찾지 못했어요.",
+        422,
+        API_ERROR_CODE.GEOCODE_FAILED,
+      );
     }
 
     const placeLabel = extractPlaceLabel(primaryRegion);
 
     if (!placeLabel) {
-      return fail("이 좌표의 지역 정보를 찾지 못했어요.", 422, "GEOCODE_FAILED");
+      return fail(
+        "이 좌표의 지역 정보를 찾지 못했어요.",
+        422,
+        API_ERROR_CODE.GEOCODE_FAILED,
+      );
     }
 
     return ok({ placeLabel });
@@ -144,7 +156,7 @@ export async function GET(request: Request) {
       return fail(
         "위치 확인 시간이 초과됐어요. 다시 시도해 주세요.",
         504,
-        "GEOCODE_TIMEOUT",
+        API_ERROR_CODE.GEOCODE_TIMEOUT,
       );
     }
 
@@ -152,7 +164,7 @@ export async function GET(request: Request) {
     return fail(
       "지역 정보를 가져오는 중 오류가 발생했어요.",
       502,
-      "GEOCODE_ERROR",
+      API_ERROR_CODE.GEOCODE_ERROR,
     );
   } finally {
     clearTimeout(timeoutHandle);

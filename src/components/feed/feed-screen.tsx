@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import { fetchMyProfileClient } from "@/lib/api/profile-client";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import {
+  getCachedBrowserCoordinates,
   getCurrentBrowserCoordinates,
-  isGeoPermissionDenied,
+  getGeoErrorMessage,
 } from "@/lib/geo/browser-location";
 import { useFeed } from "@/lib/hooks/use-feed";
+import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
 import type { FeedItem } from "@/types/domain";
 import { FeedHeader } from "./feed-header";
@@ -37,6 +40,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [composeLocating, setComposeLocating] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
   const [postActionError, setPostActionError] = useState<string | null>(null);
+  const mountedRef = useMountedRef();
 
   const {
     state,
@@ -44,7 +48,8 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     refresh,
     loadMore,
     updateItem,
-    removeItem,
+    removeItemOptimistic,
+    restoreRemovedItem,
     prependItem,
     requestLocation,
   } = useFeed();
@@ -58,23 +63,27 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     handleReport,
   } = usePostActions<FeedItem>({
     updateItem,
-    removeItem,
+    removeItemOptimistic,
+    restoreRemovedItem,
     coordsRef,
     onLocationError: setPostActionError,
+    onActionError: setPostActionError,
   });
 
   const locationAvailable = !state.locationDenied;
   const firstPlaceLabel = state.items[0]?.placeLabel ?? null;
 
   useEffect(() => {
-    let cancelled = false;
+    if (resolvedCurrentUserId && resolvedCurrentNickname) {
+      return;
+    }
 
     async function resolveCurrentProfile() {
       const result = await fetchMyProfileClient();
-      if (cancelled) return;
+      if (!mountedRef.current) return;
 
       if (!result.ok) {
-        if (result.code === "UNAUTHORIZED") {
+        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
           setResolvedCurrentUserId(null);
           setResolvedCurrentNickname(null);
         }
@@ -86,11 +95,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     }
 
     void resolveCurrentProfile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
 
   async function handleComposeClick() {
     if (composeLocating) return;
@@ -103,20 +108,26 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       return;
     }
 
+    if (coordsRef.current) {
+      setComposeState({ open: true, coords: coordsRef.current });
+      return;
+    }
+
+    const cachedCoords = getCachedBrowserCoordinates();
+    if (cachedCoords) {
+      coordsRef.current = cachedCoords;
+      setComposeState({ open: true, coords: cachedCoords });
+      return;
+    }
+
     setComposeLocating(true);
 
     try {
-      const coords = await getCurrentBrowserCoordinates();
+      const coords = await getCurrentBrowserCoordinates({ context: "compose" });
       coordsRef.current = coords;
       setComposeState({ open: true, coords });
     } catch (err) {
-      if (isGeoPermissionDenied(err)) {
-        setComposeError(
-          "위치 권한을 허용하면 글을 남길 수 있어요. 브라우저 설정을 확인해 주세요.",
-        );
-      } else {
-        setComposeError("현재 위치를 확인하지 못했어요. 다시 시도해 주세요.");
-      }
+      setComposeError(getGeoErrorMessage(err, "compose"));
     } finally {
       setComposeLocating(false);
     }

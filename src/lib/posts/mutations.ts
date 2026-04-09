@@ -1,10 +1,12 @@
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
+import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import {
   createPostRepository,
   deletePostRepository,
   likePostRepository,
   reportPostRepository,
 } from "./repository/mutations";
+import { refreshFeedStateBestEffort } from "./repository/feed-state";
 import { validatePostContent } from "./validators";
 
 // ---------------------------
@@ -28,7 +30,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   if (!validation.valid) {
     return {
       ok: false,
-      code: "VALIDATION_ERROR",
+      code: API_ERROR_CODE.VALIDATION_ERROR,
       message: validation.message ?? "내용을 다시 확인해 주세요.",
     };
   }
@@ -38,6 +40,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   }
 
   const result = await createPostRepository(input);
+  await refreshFeedStateBestEffort("create_post");
   return { ok: true, postId: result.post_id };
 }
 
@@ -58,10 +61,11 @@ type LikePostResult =
 
 // Supabase PostgreSQL 예외 코드 → API 에러 코드 매핑
 const LIKE_RPC_ERROR_MAP: Record<string, { code: string; message: string; status: number }> = {
-  P0001: { code: "UNAUTHORIZED",      message: "로그인이 필요해요.",             status: 401 },
-  P0002: { code: "ALREADY_LIKED",     message: "이미 라이크한 글이에요.",         status: 409 },
-  P0003: { code: "POST_NOT_FOUND",    message: "글을 찾을 수 없어요.",            status: 404 },
-  P0004: { code: "CANNOT_LIKE_OWN",   message: "내 글은 라이크할 수 없어요.",     status: 403 },
+  P0001: { code: API_ERROR_CODE.UNAUTHORIZED,    message: API_ERROR_MESSAGE.AUTH_REQUIRED, status: 401 },
+  P0002: { code: API_ERROR_CODE.ALREADY_LIKED,   message: "이미 라이크한 글이에요.", status: 409 },
+  P0003: { code: API_ERROR_CODE.POST_NOT_FOUND,  message: "글을 찾을 수 없어요.",  status: 404 },
+  P0004: { code: API_ERROR_CODE.CANNOT_LIKE_OWN, message: "내 글은 라이크할 수 없어요.", status: 403 },
+  "23505": { code: API_ERROR_CODE.ALREADY_LIKED, message: "이미 라이크한 글이에요.", status: 409 },
 };
 
 export async function likePost(input: LikePostInput): Promise<LikePostResult & { status?: number }> {
@@ -71,6 +75,7 @@ export async function likePost(input: LikePostInput): Promise<LikePostResult & {
 
   try {
     const result = await likePostRepository(input);
+    await refreshFeedStateBestEffort("like_post");
     return { ok: true, likeCount: Number(result.like_count) };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
@@ -95,13 +100,14 @@ export async function deletePost(postId: string): Promise<DeletePostResult> {
 
   try {
     await deletePostRepository(postId);
+    await refreshFeedStateBestEffort("delete_post");
     return { ok: true };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
     if (code === "P0003") {
       return {
         ok: false,
-        code: "POST_NOT_FOUND",
+        code: API_ERROR_CODE.POST_NOT_FOUND,
         message: "글을 찾을 수 없거나 이미 삭제되었어요.",
         status: 404,
       };
@@ -134,7 +140,7 @@ export async function reportPost(input: ReportPostInput): Promise<ReportPostResu
   if (!VALID_REASON_CODES.has(input.reasonCode)) {
     return {
       ok: false,
-      code: "INVALID_REASON_CODE",
+      code: API_ERROR_CODE.INVALID_REASON_CODE,
       message: "올바르지 않은 신고 사유예요.",
     };
   }

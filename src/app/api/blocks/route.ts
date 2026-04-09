@@ -1,5 +1,6 @@
 import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
+import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createBlockRepository } from "@/lib/blocks/repository";
@@ -12,7 +13,11 @@ export async function POST(request: Request) {
   const { blockedUserId } = bodyResult.body;
 
   if (!blockedUserId?.trim()) {
-    return fail("차단할 사용자 ID가 필요해요.", 400, "VALIDATION_ERROR");
+    return fail(
+      "차단할 사용자 ID가 필요해요.",
+      400,
+      API_ERROR_CODE.VALIDATION_ERROR,
+    );
   }
 
   if (!hasSupabaseBrowserConfig()) {
@@ -24,10 +29,20 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return fail("로그인이 필요해요.", 401, "UNAUTHORIZED");
+  if (!user) {
+    return fail(
+      API_ERROR_MESSAGE.AUTH_REQUIRED,
+      401,
+      API_ERROR_CODE.UNAUTHORIZED,
+    );
+  }
 
   if (user.id === blockedUserId) {
-    return fail("자기 자신은 차단할 수 없어요.", 400, "VALIDATION_ERROR");
+    return fail(
+      "자기 자신은 차단할 수 없어요.",
+      400,
+      API_ERROR_CODE.VALIDATION_ERROR,
+    );
   }
 
   try {
@@ -35,6 +50,10 @@ export async function POST(request: Request) {
     return ok({ blocked: true as const });
   } catch (error) {
     console.error("[api/blocks] 차단 실패:", error);
-    return fail("차단 처리 중 오류가 발생했어요.", 500, "INTERNAL_ERROR");
+    return fail(
+      "차단 처리 중 오류가 발생했어요.",
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
   }
 }

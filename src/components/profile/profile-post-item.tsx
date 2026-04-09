@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import type { ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { LikersList } from "./likers-list";
+import { ProfileCard } from "./profile-card";
+import { ProfileItemMenu } from "./profile-item-menu";
 
 type LikersState = {
   items: PostLikerItem[];
@@ -30,24 +31,30 @@ export function ProfilePostItem({
   onDelete,
   onReport,
 }: Props) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   const { postId, content, placeLabel, relativeTime, likeCount } = item;
   const isLikersExpanded = expandedLikersId === postId;
   const likersState = likersMap[postId];
 
+  const menuActions = isMyProfile
+    ? [
+        {
+          key: "delete",
+          label: "삭제하기",
+          onSelect: () => onDelete(postId),
+          tone: "danger" as const,
+        },
+      ]
+    : [
+        {
+          key: "report",
+          label: "신고하기",
+          onSelect: () => onReport(postId),
+          tone: "default" as const,
+        },
+      ];
+
   return (
-    <article
-      style={{
-        background: "#ffffff",
-        border: "1px solid rgba(17, 24, 39, 0.08)",
-        borderRadius: "20px",
-        boxShadow: "0 2px 8px rgba(17, 24, 39, 0.04)",
-        padding: "16px 18px",
-        position: "relative",
-      }}
-    >
-      {/* 메타 + 메뉴 */}
+    <ProfileCard>
       <div
         style={{
           alignItems: "flex-start",
@@ -74,108 +81,9 @@ export function ProfilePostItem({
           {relativeTime}
         </p>
 
-        <div style={{ position: "relative" }}>
-          <button
-            aria-label="메뉴"
-            onClick={() => setMenuOpen((v) => !v)}
-            type="button"
-            style={{
-              appearance: "none",
-              background: "transparent",
-              border: "none",
-              color: "#9ca3af",
-              cursor: "pointer",
-              fontSize: "18px",
-              lineHeight: 1,
-              padding: "0 2px",
-            }}
-          >
-            ⋯
-          </button>
-
-          {menuOpen ? (
-            <>
-              <button
-                aria-label="메뉴 닫기"
-                onClick={() => setMenuOpen(false)}
-                type="button"
-                style={{
-                  appearance: "none",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "default",
-                  inset: 0,
-                  padding: 0,
-                  position: "fixed",
-                  zIndex: 10,
-                }}
-              />
-              <div
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "12px",
-                  boxShadow: "0 8px 24px rgba(17, 24, 39, 0.12)",
-                  minWidth: "130px",
-                  overflow: "hidden",
-                  position: "absolute",
-                  right: 0,
-                  top: "28px",
-                  zIndex: 11,
-                }}
-              >
-                {isMyProfile ? (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDelete(postId);
-                    }}
-                    type="button"
-                    style={{
-                      appearance: "none",
-                      background: "none",
-                      border: "none",
-                      color: "#ef4444",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      padding: "12px 16px",
-                      textAlign: "left",
-                      width: "100%",
-                    }}
-                  >
-                    삭제하기
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onReport(postId);
-                    }}
-                    type="button"
-                    style={{
-                      appearance: "none",
-                      background: "none",
-                      border: "none",
-                      color: "#374151",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      padding: "12px 16px",
-                      textAlign: "left",
-                      width: "100%",
-                    }}
-                  >
-                    신고하기
-                  </button>
-                )}
-              </div>
-            </>
-          ) : null}
-        </div>
+        <ProfileItemMenu actions={menuActions} />
       </div>
 
-      {/* 본문 */}
       <p
         style={{
           color: "#111827",
@@ -190,11 +98,10 @@ export function ProfilePostItem({
         {content}
       </p>
 
-      {/* 라이크 수 (내 프로필이면 클릭 가능) */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           aria-label={
-            isMyProfile ? "라이커 목록 펼치기" : `라이크 ${likeCount}개`
+            isMyProfile ? "라이커 목록 펼치기" : `좋아요 ${likeCount}개`
           }
           aria-expanded={isLikersExpanded}
           disabled={!isMyProfile}
@@ -215,15 +122,16 @@ export function ProfilePostItem({
             padding: "4px 10px",
           }}
         >
-          <span style={{ fontSize: "13px" }}>♡</span>
+          <span style={{ fontSize: "13px" }}>♥</span>
           <span>{likeCount}</span>
           {isMyProfile ? (
-            <span style={{ fontSize: "10px" }}>{isLikersExpanded ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "10px" }}>
+              {isLikersExpanded ? "▲" : "▼"}
+            </span>
           ) : null}
         </button>
       </div>
 
-      {/* 인라인 라이커 목록 */}
       {isLikersExpanded && likersState ? (
         <div
           style={{
@@ -234,6 +142,6 @@ export function ProfilePostItem({
           <LikersList loading={likersState.loading} items={likersState.items} />
         </div>
       ) : null}
-    </article>
+    </ProfileCard>
   );
 }

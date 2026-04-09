@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { clearMyProfileCache, clearProfileCache } from "@/lib/api/profile-client";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_code: "로그인 코드가 유효하지 않아요. 다시 시도해 주세요.",
@@ -19,6 +20,8 @@ function LoginForm() {
   async function handleGoogleLogin() {
     if (loading) return;
     setLoading(true);
+    clearMyProfileCache();
+    clearProfileCache();
 
     const supabase = getSupabaseBrowserClient();
     await supabase.auth.signInWithOAuth({

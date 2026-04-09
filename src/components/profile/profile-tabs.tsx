@@ -9,6 +9,10 @@ import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
 import { ProfilePostItem as ProfilePostItemCard } from "./profile-post-item";
 import { ProfileLikeItem as ProfileLikeItemCard } from "./profile-like-item";
+import {
+  ProfileLoadMoreButton,
+  ProfileTabEmptyState,
+} from "./profile-list-controls";
 
 type PostsTabProps = {
   state: ProfileListState<ProfilePostItem>;
@@ -36,18 +40,7 @@ export function ProfilePostsTabContent({
   if (state.loading) return <LoadingState label="작성한 글 불러오는 중" />;
   if (state.errorMessage) return <ErrorState message={state.errorMessage} />;
   if (state.items.length === 0) {
-    return (
-      <p
-        style={{
-          color: "#9ca3af",
-          fontSize: "14px",
-          padding: "40px 0",
-          textAlign: "center",
-        }}
-      >
-        작성한 글이 없어요.
-      </p>
-    );
+    return <ProfileTabEmptyState message="작성한 글이 없어요." />;
   }
 
   return (
@@ -67,24 +60,7 @@ export function ProfilePostsTabContent({
       ))}
 
       {state.nextCursor && !state.loadingMore ? (
-        <button
-          onClick={onLoadMore}
-          type="button"
-          style={{
-            appearance: "none",
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
-            borderRadius: "9999px",
-            color: "#374151",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: 600,
-            padding: "12px",
-            width: "100%",
-          }}
-        >
-          더보기
-        </button>
+        <ProfileLoadMoreButton onClick={onLoadMore} label="더보기" />
       ) : null}
 
       {state.loadingMore ? <LoadingState label="더 불러오는 중" /> : null}
@@ -112,18 +88,7 @@ export function ProfileLikesTabContent({
   if (state.loading) return <LoadingState label="라이크한 글 불러오는 중" />;
   if (state.errorMessage) return <ErrorState message={state.errorMessage} />;
   if (state.items.length === 0) {
-    return (
-      <p
-        style={{
-          color: "#9ca3af",
-          fontSize: "14px",
-          padding: "40px 0",
-          textAlign: "center",
-        }}
-      >
-        라이크한 글이 없어요.
-      </p>
-    );
+    return <ProfileTabEmptyState message="라이크한 글이 없어요." />;
   }
 
   return (
@@ -140,24 +105,7 @@ export function ProfileLikesTabContent({
       ))}
 
       {state.nextCursor && !state.loadingMore ? (
-        <button
-          onClick={onLoadMore}
-          type="button"
-          style={{
-            appearance: "none",
-            background: "#f9fafb",
-            border: "1px solid #e5e7eb",
-            borderRadius: "9999px",
-            color: "#374151",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: 600,
-            padding: "12px",
-            width: "100%",
-          }}
-        >
-          더보기
-        </button>
+        <ProfileLoadMoreButton onClick={onLoadMore} label="더보기" />
       ) : null}
 
       {state.loadingMore ? <LoadingState label="더 불러오는 중" /> : null}

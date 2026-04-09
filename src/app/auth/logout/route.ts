@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasSupabaseServerConfig } from "@/lib/supabase/config";
+import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 
 /**
  * 로그아웃 처리.
@@ -10,7 +10,7 @@ import { hasSupabaseServerConfig } from "@/lib/supabase/config";
 export async function GET(request: Request) {
   const { origin } = new URL(request.url);
 
-  if (hasSupabaseServerConfig()) {
+  if (hasSupabaseBrowserConfig()) {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.signOut();
   }

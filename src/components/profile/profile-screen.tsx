@@ -45,6 +45,7 @@ export function ProfileScreen({ userId }: Props) {
     profileErrorMessage,
     nickname,
     setNickname,
+    setNicknameChangedAt,
     isMyProfile,
     currentUserId,
     nicknameChangedAt,
@@ -62,7 +63,8 @@ export function ProfileScreen({ userId }: Props) {
     toggleLikers,
     updatePost,
     updateLike,
-    removePost,
+    removePostOptimistic,
+    restoreRemovedPost,
   } = useProfile(userId, isMyProfile);
 
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
@@ -86,11 +88,13 @@ export function ProfileScreen({ userId }: Props) {
     openReport,
     closeReport,
     handleReport,
-  } = usePostActions<ProfileLikeableItem>({
+  } = usePostActions<ProfileLikeableItem, ProfilePostItemType>({
     updateItem: updateAnyItem,
-    removeItem: removePost,
+    removeItemOptimistic: removePostOptimistic,
+    restoreRemovedItem: restoreRemovedPost,
     coordsRef,
     onLocationError: setLikeError,
+    onActionError: setLikeError,
   });
 
   const onLike = useCallback(
@@ -164,7 +168,10 @@ export function ProfileScreen({ userId }: Props) {
           setBlockActionMessage(null);
           setBlockDialogOpen(true);
         }}
-        onNicknameChange={setNickname}
+        onNicknameChange={(newNickname, changedAt) => {
+          setNickname(newNickname);
+          setNicknameChangedAt(changedAt);
+        }}
       />
 
       <div

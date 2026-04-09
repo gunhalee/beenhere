@@ -52,6 +52,23 @@ export function FeedList({
         gap: "12px",
       }}
     >
+      {status === "success" && errorMessage ? (
+        <div
+          role="alert"
+          style={{
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: "14px",
+            color: "#b91c1c",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            padding: "10px 12px",
+          }}
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+
       {items.map((item) => (
         <FeedItemCard
           key={item.postId}

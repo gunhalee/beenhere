@@ -1,6 +1,7 @@
-import { ok, fail } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
+import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
+import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasSupabaseBrowserConfig, hasSupabaseServerConfig } from "@/lib/supabase/config";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { generateNickname } from "@/lib/nickname/generate";
 import {
@@ -8,7 +9,6 @@ import {
   regenerateNicknameRepository,
 } from "@/lib/profiles/repository";
 
-// GET /api/profiles/me — 본인 프로필 조회 (닉네임 쿨다운 정보 포함)
 export async function GET() {
   if (!hasSupabaseBrowserConfig()) {
     return ok({
@@ -19,9 +19,8 @@ export async function GET() {
   }
 
   const profile = await getMyProfileRepository();
-
   if (!profile) {
-    return fail("로그인이 필요해요.", 401, "UNAUTHORIZED");
+    return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
   }
 
   return ok({
@@ -31,16 +30,17 @@ export async function GET() {
   });
 }
 
-// PATCH /api/profiles/me — 닉네임 재생성
 export async function PATCH() {
   if (!hasSupabaseBrowserConfig()) {
-    return ok({ nickname: formatNicknameForDisplay(generateNickname()) });
+    return ok({
+      nickname: formatNicknameForDisplay(generateNickname()),
+      nicknameChangedAt: new Date().toISOString(),
+    });
   }
 
   const profile = await getMyProfileRepository();
-
   if (!profile) {
-    return fail("로그인이 필요해요.", 401, "UNAUTHORIZED");
+    return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
   }
 
   const result = await regenerateNicknameRepository(
@@ -49,17 +49,21 @@ export async function PATCH() {
   );
 
   if (!result.ok) {
-    const body: Record<string, unknown> = { error: result.message, code: result.code };
-    if ("daysRemaining" in result) body.daysRemaining = result.daysRemaining;
-    return fail(result.message, 429, result.code);
+    const details =
+      "daysRemaining" in result && typeof result.daysRemaining === "number"
+        ? { daysRemaining: result.daysRemaining }
+        : undefined;
+    return fail(result.message, 429, result.code, details);
   }
 
-  return ok({ nickname: result.nickname });
+  return ok({
+    nickname: result.nickname,
+    nicknameChangedAt: result.nicknameChangedAt,
+  });
 }
 
-// POST /api/profiles/me — 온보딩: 프로필 생성 (최초 1회)
 export async function POST(request: Request) {
-  if (!hasSupabaseServerConfig()) {
+  if (!hasSupabaseBrowserConfig()) {
     return ok({ nickname: formatNicknameForDisplay(generateNickname()) });
   }
 
@@ -67,7 +71,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return fail("요청 형식이 올바르지 않습니다.", 400);
+    return fail(API_ERROR_MESSAGE.INVALID_REQUEST, 400, API_ERROR_CODE.INVALID_REQUEST);
   }
 
   const nickname =
@@ -75,11 +79,15 @@ export async function POST(request: Request) {
     typeof body === "object" &&
     "nickname" in body &&
     typeof (body as Record<string, unknown>).nickname === "string"
-      ? ((body as Record<string, unknown>).nickname as string).trim()
+      ? (body as { nickname: string }).nickname.trim()
       : null;
 
   if (!nickname || nickname.length < 2 || nickname.length > 30) {
-    return fail("닉네임은 2~30자여야 합니다.", 400);
+    return fail(
+      API_ERROR_MESSAGE.INVALID_NICKNAME_LENGTH,
+      400,
+      API_ERROR_CODE.VALIDATION_ERROR,
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -89,10 +97,9 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    return fail("로그인이 필요합니다.", 401);
+    return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
   }
 
-  // 이미 프로필이 있으면 생성 불가
   const { data: existing } = await supabase
     .from("profiles")
     .select("id")
@@ -100,7 +107,11 @@ export async function POST(request: Request) {
     .single();
 
   if (existing) {
-    return fail("이미 프로필이 존재합니다.", 409);
+    return fail(
+      API_ERROR_MESSAGE.PROFILE_ALREADY_EXISTS,
+      409,
+      API_ERROR_CODE.PROFILE_ALREADY_EXISTS,
+    );
   }
 
   const { error: insertError } = await supabase
@@ -109,10 +120,15 @@ export async function POST(request: Request) {
 
   if (insertError) {
     if (insertError.code === "23505") {
-      return fail("이미 사용 중인 닉네임입니다.", 409);
+      return fail(API_ERROR_MESSAGE.NICKNAME_TAKEN, 409, API_ERROR_CODE.NICKNAME_TAKEN);
     }
-    return fail("프로필 생성에 실패했습니다.", 500);
+    return fail(
+      API_ERROR_MESSAGE.PROFILE_CREATE_FAILED,
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
   }
 
   return ok({ nickname: formatNicknameForDisplay(nickname) });
 }
+

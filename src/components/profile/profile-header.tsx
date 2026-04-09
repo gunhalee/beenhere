@@ -3,22 +3,34 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { regenNicknameClient } from "@/lib/api/profile-client";
-
-const COOLDOWN_DAYS = 7;
+import {
+  clearMyProfileCache,
+  clearProfileCache,
+  regenNicknameClient,
+  updateMyProfileCacheNickname,
+} from "@/lib/api/profile-client";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import { daysUntilNicknameRegen } from "@/lib/nickname/generate";
 
 type Props = {
   nickname: string;
   isMyProfile: boolean;
   nicknameChangedAt?: string | null;
   onBlockClick?: () => void;
-  onNicknameChange?: (newNickname: string) => void;
+  onNicknameChange?: (newNickname: string, nicknameChangedAt: string) => void;
 };
+
+function readDaysRemaining(details: unknown): number | null {
+  if (!details || typeof details !== "object") return null;
+  const days = (details as { daysRemaining?: unknown }).daysRemaining;
+  if (typeof days !== "number" || !Number.isFinite(days) || days < 1) return null;
+  return Math.ceil(days);
+}
 
 export function ProfileHeader({
   nickname,
   isMyProfile,
-  nicknameChangedAt,
+  nicknameChangedAt = null,
   onBlockClick,
   onNicknameChange,
 }: Props) {
@@ -26,27 +38,37 @@ export function ProfileHeader({
   const [menuOpen, setMenuOpen] = useState(false);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
-
-  const canRegen = !nicknameChangedAt
-    ? true
-    : Date.now() - new Date(nicknameChangedAt).getTime() >
-      COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+  const daysUntilRegen = daysUntilNicknameRegen(nicknameChangedAt);
+  const canRegenNickname = daysUntilRegen === 0;
 
   async function handleRegenNickname() {
     if (regenLoading) return;
+    if (!canRegenNickname) {
+      setRegenError(`프로필 이름은 ${daysUntilRegen}일 후 변경할 수 있어요.`);
+      return;
+    }
     setRegenLoading(true);
     setRegenError(null);
 
     const result = await regenNicknameClient();
-
     setRegenLoading(false);
 
     if (!result.ok) {
-      setRegenError(result.error ?? "닉네임을 변경하지 못했어요.");
+      const daysRemaining = readDaysRemaining(result.details);
+      if (result.code === API_ERROR_CODE.COOLDOWN_ACTIVE && daysRemaining !== null) {
+        setRegenError(`프로필 이름은 ${daysRemaining}일 후 변경할 수 있어요.`);
+        return;
+      }
+
+      setRegenError(result.error ?? "프로필 이름을 변경하지 못했어요.");
       return;
     }
 
-    onNicknameChange?.(result.data.nickname);
+    updateMyProfileCacheNickname({
+      nickname: result.data.nickname,
+      nicknameChangedAt: result.data.nicknameChangedAt,
+    });
+    onNicknameChange?.(result.data.nickname, result.data.nicknameChangedAt);
   }
 
   return (
@@ -159,7 +181,7 @@ export function ProfileHeader({
                 {isMyProfile ? (
                   <>
                     <button
-                      disabled={!canRegen || regenLoading}
+                      disabled={regenLoading || !canRegenNickname}
                       onClick={() => {
                         setMenuOpen(false);
                         void handleRegenNickname();
@@ -170,10 +192,8 @@ export function ProfileHeader({
                         background: "none",
                         border: "none",
                         borderBottom: "1px solid #f3f4f6",
-                        color:
-                          canRegen && !regenLoading ? "#111827" : "#9ca3af",
-                        cursor:
-                          canRegen && !regenLoading ? "pointer" : "default",
+                        color: regenLoading || !canRegenNickname ? "#9ca3af" : "#111827",
+                        cursor: regenLoading || !canRegenNickname ? "default" : "pointer",
                         fontSize: "14px",
                         fontWeight: 500,
                         padding: "12px 16px",
@@ -182,13 +202,17 @@ export function ProfileHeader({
                       }}
                     >
                       {regenLoading
-                        ? "변경 중…"
-                        : canRegen
-                          ? "닉네임 재생성"
-                          : `닉네임 재생성 (${COOLDOWN_DAYS}일마다 가능)`}
+                        ? "변경 중..."
+                        : canRegenNickname
+                          ? "프로필 이름 변경"
+                          : `프로필 이름 변경 (${daysUntilRegen}일 후)`}
                     </button>
                     <Link
                       href="/auth/logout"
+                      onClick={() => {
+                        clearMyProfileCache();
+                        clearProfileCache();
+                      }}
                       style={{
                         color: "#ef4444",
                         display: "block",

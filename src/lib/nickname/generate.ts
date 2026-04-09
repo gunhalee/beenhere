@@ -51,12 +51,21 @@ export function generateNicknameCandidates(count = 3): string[] {
 /** 닉네임 재생성 가능 여부 (쿨다운 7일) */
 export const NICKNAME_COOLDOWN_DAYS = 7;
 
+function parseLastChangedAt(nicknameChangedAt: string | null): number | null {
+  if (!nicknameChangedAt) return null;
+
+  const parsed = Date.parse(nicknameChangedAt);
+  if (!Number.isFinite(parsed)) return null;
+
+  return parsed;
+}
+
 export function canRegenerateNickname(
   nicknameChangedAt: string | null,
 ): boolean {
-  if (!nicknameChangedAt) return true;
+  const lastChanged = parseLastChangedAt(nicknameChangedAt);
+  if (lastChanged === null) return true;
 
-  const lastChanged = new Date(nicknameChangedAt).getTime();
   const cooldownMs = NICKNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
 
   return Date.now() - lastChanged >= cooldownMs;
@@ -66,9 +75,9 @@ export function canRegenerateNickname(
 export function daysUntilNicknameRegen(
   nicknameChangedAt: string | null,
 ): number {
-  if (!nicknameChangedAt) return 0;
+  const lastChanged = parseLastChangedAt(nicknameChangedAt);
+  if (lastChanged === null) return 0;
 
-  const lastChanged = new Date(nicknameChangedAt).getTime();
   const cooldownMs = NICKNAME_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
   const remainingMs = cooldownMs - (Date.now() - lastChanged);
 

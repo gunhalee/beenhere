@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   fetchMyProfileClient,
   fetchProfileClient,
 } from "@/lib/api/profile-client";
+import { useMountedRef } from "./use-mounted-ref";
 
 export type ProfileContextLoadState = "loading" | "ready" | "error";
 
@@ -20,20 +21,22 @@ export function useProfileContext(userId: string) {
   const [nicknameChangedAt, setNicknameChangedAt] = useState<string | null>(
     null,
   );
+  const mountedRef = useMountedRef();
+  const requestTokenRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    requestTokenRef.current += 1;
+    const requestToken = requestTokenRef.current;
 
     async function loadProfileContext() {
       setProfileLoadState("loading");
       setProfileErrorMessage(null);
+      setCurrentUserId(null);
+      setNicknameChangedAt(null);
+      setIsMyProfile(false);
 
-      const [profileResult, myProfileResult] = await Promise.all([
-        fetchProfileClient(userId),
-        fetchMyProfileClient(),
-      ]);
-
-      if (cancelled) return;
+      const profileResult = await fetchProfileClient(userId);
+      if (!mountedRef.current || requestTokenRef.current !== requestToken) return;
 
       if (!profileResult.ok) {
         setProfileLoadState("error");
@@ -45,30 +48,29 @@ export function useProfileContext(userId: string) {
 
       setNickname(profileResult.data.nickname);
       setProfileLoadState("ready");
+    }
+
+    async function loadViewerContext() {
+      const myProfileResult = await fetchMyProfileClient({ force: true });
+      if (!mountedRef.current || requestTokenRef.current !== requestToken) return;
 
       if (myProfileResult.ok) {
         setCurrentUserId(myProfileResult.data.id);
         setNicknameChangedAt(myProfileResult.data.nicknameChangedAt);
         setIsMyProfile(myProfileResult.data.id === userId);
-      } else {
-        setCurrentUserId(null);
-        setNicknameChangedAt(null);
-        setIsMyProfile(false);
       }
     }
 
     void loadProfileContext();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+    void loadViewerContext();
+  }, [mountedRef, userId]);
 
   return {
     profileLoadState,
     profileErrorMessage,
     nickname,
     setNickname,
+    setNicknameChangedAt,
     isMyProfile,
     currentUserId,
     nicknameChangedAt,

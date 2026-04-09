@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/api/response";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { getProfilePostsRepository } from "@/lib/profiles/repository";
 
@@ -19,6 +20,10 @@ export async function GET(request: Request, context: Context) {
     return ok({ items: result.items, nextCursor: result.nextCursor });
   } catch (error) {
     console.error("[api/profiles/:userId/posts] 조회 실패:", error);
-    return fail("작성 글 목록을 불러오는 중 오류가 발생했어요.", 500, "INTERNAL_ERROR");
+    return fail(
+      "작성 글 목록을 불러오는 중 오류가 발생했어요.",
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
   }
 }

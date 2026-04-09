@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
 
 export async function createBlockRepository(
   blockedUserId: string,
@@ -9,7 +10,7 @@ export async function createBlockRepository(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("UNAUTHORIZED");
+  if (!user) throw new Error(API_ERROR_CODE.UNAUTHORIZED);
 
   const { error } = await supabase
     .from("blocks")
@@ -28,7 +29,7 @@ export async function deleteBlockRepository(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error("UNAUTHORIZED");
+  if (!user) throw new Error(API_ERROR_CODE.UNAUTHORIZED);
 
   const { error } = await supabase
     .from("blocks")

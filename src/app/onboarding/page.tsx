@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { generateNicknameCandidates } from "@/lib/nickname/generate";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { fetchApi } from "@/lib/api/client";
+import { API_TIMEOUT_CODE } from "@/lib/api/common-errors";
+import { clearMyProfileCache, clearProfileCache } from "@/lib/api/profile-client";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -31,6 +33,9 @@ export default function OnboardingPage() {
     const result = await fetchApi<{ nickname: string }>("/api/profiles/me", {
       method: "POST",
       body: { nickname: selected },
+      timeoutMs: 5000,
+      timeoutErrorMessage: "닉네임 저장이 지연되고 있어요. 다시 시도해 주세요.",
+      timeoutCode: API_TIMEOUT_CODE.TIMEOUT_ONBOARDING_PROFILE_CREATE,
     });
 
     if (!result.ok) {
@@ -39,6 +44,8 @@ export default function OnboardingPage() {
       return;
     }
 
+    clearMyProfileCache();
+    clearProfileCache();
     router.replace("/");
   }
 

@@ -4,6 +4,25 @@ export function encodeFeedCursor(cursor: FeedCursor): string {
   return Buffer.from(JSON.stringify(cursor)).toString("base64url");
 }
 
+function isValidIsoDateString(value: string): boolean {
+  const time = Date.parse(value);
+  return Number.isFinite(time);
+}
+
+function isFeedCursor(value: unknown): value is FeedCursor {
+  if (value === null || typeof value !== "object") return false;
+
+  const maybe = value as Partial<FeedCursor>;
+  return (
+    typeof maybe.distanceMeters === "number" &&
+    Number.isFinite(maybe.distanceMeters) &&
+    typeof maybe.lastActivityAt === "string" &&
+    isValidIsoDateString(maybe.lastActivityAt) &&
+    typeof maybe.postId === "string" &&
+    maybe.postId.trim().length > 0
+  );
+}
+
 export function decodeFeedCursor(encoded: string | null | undefined): FeedCursor | null {
   if (!encoded) return null;
 
@@ -11,16 +30,7 @@ export function decodeFeedCursor(encoded: string | null | undefined): FeedCursor
     const decoded = Buffer.from(encoded, "base64url").toString("utf-8");
     const parsed = JSON.parse(decoded) as unknown;
 
-    if (
-      parsed !== null &&
-      typeof parsed === "object" &&
-      "distanceMeters" in parsed &&
-      "lastActivityAt" in parsed &&
-      "postId" in parsed &&
-      typeof (parsed as FeedCursor).distanceMeters === "number" &&
-      typeof (parsed as FeedCursor).lastActivityAt === "string" &&
-      typeof (parsed as FeedCursor).postId === "string"
-    ) {
+    if (isFeedCursor(parsed)) {
       return parsed as FeedCursor;
     }
 
