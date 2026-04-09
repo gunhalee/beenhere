@@ -21,6 +21,9 @@ export function useProfileContext(userId: string) {
   const [nicknameChangedAt, setNicknameChangedAt] = useState<string | null>(
     null,
   );
+  const [viewerIsAnonymous, setViewerIsAnonymous] = useState(false);
+  const [viewerGoogleLinked, setViewerGoogleLinked] = useState(false);
+  const [viewerCanLinkGoogle, setViewerCanLinkGoogle] = useState(false);
   const mountedRef = useMountedRef();
   const requestTokenRef = useRef(0);
 
@@ -34,6 +37,9 @@ export function useProfileContext(userId: string) {
       setCurrentUserId(null);
       setNicknameChangedAt(null);
       setIsMyProfile(false);
+      setViewerIsAnonymous(false);
+      setViewerGoogleLinked(false);
+      setViewerCanLinkGoogle(false);
 
       const profileResult = await fetchProfileClient(userId);
       if (!mountedRef.current || requestTokenRef.current !== requestToken) return;
@@ -58,6 +64,9 @@ export function useProfileContext(userId: string) {
         setCurrentUserId(myProfileResult.data.id);
         setNicknameChangedAt(myProfileResult.data.nicknameChangedAt);
         setIsMyProfile(myProfileResult.data.id === userId);
+        setViewerIsAnonymous(myProfileResult.data.isAnonymous ?? false);
+        setViewerGoogleLinked(myProfileResult.data.googleLinked ?? false);
+        setViewerCanLinkGoogle(myProfileResult.data.canLinkGoogle ?? false);
       }
     }
 
@@ -74,5 +83,8 @@ export function useProfileContext(userId: string) {
     isMyProfile,
     currentUserId,
     nicknameChangedAt,
+    viewerIsAnonymous,
+    viewerGoogleLinked,
+    viewerCanLinkGoogle,
   };
 }

@@ -25,6 +25,7 @@ export type PostRow = {
   id:               string;
   author_id:        string;
   content:          string;
+  client_request_id: string | null;
   status:           PostStatus;
   last_activity_at: string;
   active_until:     string;
@@ -108,6 +109,7 @@ export type ProfilePostRow = {
   post_id:          string;
   content:          string;
   place_label:      string | null;
+  distance_meters:  number | null;
   last_activity_at: string;
   post_created_at:  string;   // 커서용
   like_count:       number;
@@ -123,6 +125,7 @@ export type ProfileLikeRow = {
   author_id:        string;
   author_nickname:  string;
   place_label:      string;
+  distance_meters:  number | null;
   last_activity_at: string;
   like_id:          string;   // 커서용
   like_created_at:  string;   // 커서용

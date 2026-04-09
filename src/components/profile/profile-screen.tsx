@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ProfileLikeItem as ProfileLikeItemType,
   ProfilePostItem as ProfilePostItemType,
 } from "@/types/domain";
 import type { Coordinates } from "@/lib/geo/browser-location";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 import { useProfile, type ProfileTab } from "@/lib/hooks/use-profile";
 import { useProfileContext } from "@/lib/hooks/use-profile-context";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
@@ -15,6 +16,7 @@ import { ErrorState } from "@/components/common/error-state";
 import { FeedReportDialog } from "@/components/feed/feed-report-dialog";
 import { ProfileHeader } from "./profile-header";
 import { ProfileBlockDialog } from "./profile-block-dialog";
+import { ProfileLinkGoogleBanner } from "./profile-link-google-banner";
 import {
   ProfileLikesTabContent,
   ProfilePostsTabContent,
@@ -25,8 +27,17 @@ type Props = {
 };
 
 const TAB_LABELS: Record<ProfileTab, string> = {
-  posts: "작성한 글",
-  likes: "라이크한 글",
+  posts: "Posts",
+  likes: "Likes",
+};
+
+const LINK_RESULT_MESSAGES: Record<string, string> = {
+  identity_already_exists:
+    "This Google account is already linked to another user.",
+  exchange_failed: "Could not complete Google account linking. Please try again.",
+  missing_code: "Could not find a valid Google linking token.",
+  profile_missing: "Could not load profile information. Please try again.",
+  user_missing: "Could not verify user session. Please sign in again.",
 };
 
 type ProfileLikeableItem = {
@@ -38,6 +49,7 @@ type ProfileLikeableItem = {
 
 export function ProfileScreen({ userId }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const coordsRef = useRef<Coordinates | null>(null);
 
   const {
@@ -49,6 +61,9 @@ export function ProfileScreen({ userId }: Props) {
     isMyProfile,
     currentUserId,
     nicknameChangedAt,
+    viewerIsAnonymous,
+    viewerGoogleLinked,
+    viewerCanLinkGoogle,
   } = useProfileContext(userId);
 
   const {
@@ -72,6 +87,8 @@ export function ProfileScreen({ userId }: Props) {
     null,
   );
   const [likeError, setLikeError] = useState<string | null>(null);
+  const [linkGoogleLoading, setLinkGoogleLoading] = useState(false);
+  const [linkGoogleError, setLinkGoogleError] = useState<string | null>(null);
 
   const updateAnyItem = useCallback(
     (postId: string, patch: Partial<ProfileLikeableItem>) => {
@@ -127,13 +144,57 @@ export function ProfileScreen({ userId }: Props) {
 
   const handleUnblocked = useCallback(() => {
     setBlockDialogOpen(false);
-    setBlockActionMessage("차단이 해제되었어요.");
+    setBlockActionMessage("User unblocked.");
   }, []);
+
+  const showLinkGoogleBanner =
+    isMyProfile && viewerIsAnonymous && !viewerGoogleLinked && viewerCanLinkGoogle;
+  const linkStatus = searchParams.get("google_link");
+  const linkReason = searchParams.get("google_link_reason");
+  const linkResultMessage = useMemo(() => {
+    if (linkStatus === "success") {
+      return {
+        tone: "success" as const,
+        message: "Google account linked successfully.",
+      };
+    }
+
+    if (linkStatus === "failed") {
+      const reasonKey = (linkReason ?? "").toLowerCase();
+      return {
+        tone: "error" as const,
+        message:
+          LINK_RESULT_MESSAGES[reasonKey] ??
+          "Could not complete Google account linking. Please try again.",
+      };
+    }
+
+    return null;
+  }, [linkReason, linkStatus]);
+
+  const handleLinkGoogle = useCallback(async () => {
+    if (linkGoogleLoading) return;
+
+    setLinkGoogleError(null);
+    setLinkGoogleLoading(true);
+
+    const result = await startGoogleOAuth({
+      intent: "link-google",
+      nextPath: `/profile/${userId}`,
+    });
+
+    if (!result.ok) {
+      setLinkGoogleLoading(false);
+      setLinkGoogleError(
+        result.error ?? "Could not start Google account linking.",
+      );
+    }
+  }, [linkGoogleLoading, userId]);
 
   if (profileLoadState === "loading") {
     return (
       <div style={{ minHeight: "100dvh", padding: "24px" }}>
-        <LoadingState label="프로필 불러오는 중" />
+        <LoadingState label="Loading profile..." />
       </div>
     );
   }
@@ -144,7 +205,7 @@ export function ProfileScreen({ userId }: Props) {
         <ErrorState
           message={
             profileErrorMessage ??
-            "존재하지 않거나 접근할 수 없는 프로필이에요."
+            "This profile does not exist or cannot be accessed."
           }
         />
       </div>
@@ -174,26 +235,35 @@ export function ProfileScreen({ userId }: Props) {
         }}
       />
 
-      <div
-        style={{
-          background: "#ffffff",
-          borderBottom: "1px solid rgba(17, 24, 39, 0.06)",
-          padding: "20px",
-          textAlign: "center",
-        }}
-      >
-        <p
+      {isMyProfile && linkResultMessage ? (
+        <div
+          role={linkResultMessage.tone === "error" ? "alert" : "status"}
           style={{
-            color: "#111827",
-            fontSize: "22px",
-            fontWeight: 800,
-            letterSpacing: "-0.04em",
-            margin: 0,
+            background:
+              linkResultMessage.tone === "error" ? "#fef2f2" : "#ecfdf3",
+            borderBottom:
+              linkResultMessage.tone === "error"
+                ? "1px solid #fecaca"
+                : "1px solid #bbf7d0",
+            color: linkResultMessage.tone === "error" ? "#b91c1c" : "#166534",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            padding: "10px 20px",
           }}
         >
-          {nickname}
-        </p>
-      </div>
+          {linkResultMessage.message}
+        </div>
+      ) : null}
+
+      {showLinkGoogleBanner ? (
+        <ProfileLinkGoogleBanner
+          loading={linkGoogleLoading}
+          errorMessage={linkGoogleError}
+          onClick={() => {
+            void handleLinkGoogle();
+          }}
+        />
+      ) : null}
 
       <div
         style={{

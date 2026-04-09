@@ -67,6 +67,9 @@ export type Profile = {
 // 본인만 접근하는 프로필 정보 (닉네임 재생성 쿨다운 판정 등)
 export type MyProfile = Profile & {
   nicknameChangedAt: string | null;
+  isAnonymous?: boolean;
+  googleLinked?: boolean;
+  canLinkGoogle?: boolean;
 };
 
 // 프로필의 작성글 아이템
@@ -74,6 +77,7 @@ export type ProfilePostItem = {
   postId:         string;
   content:        string;
   placeLabel:     string | null;
+  distanceMeters: number | null;
   relativeTime:   string;
   likeCount:      number;
   myLike:         boolean;
@@ -86,6 +90,7 @@ export type ProfileLikeItem = {
   authorId:        string;
   authorNickname:  string;
   placeLabel:      string;
+  distanceMeters:  number | null;
   relativeTime:    string;
   likeCount:       number;
   myLike:          boolean;

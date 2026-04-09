@@ -26,6 +26,7 @@ export function ProfileLikeItem({
     authorId,
     authorNickname,
     placeLabel,
+    distanceMeters,
     relativeTime,
     likeCount,
     myLike,
@@ -49,6 +50,7 @@ export function ProfileLikeItem({
             nickname={authorNickname}
             profileId={authorId}
             placeLabel={placeLabel}
+            distanceMeters={distanceMeters}
             relativeTime={relativeTime}
           />
         </div>
@@ -94,6 +96,7 @@ export function ProfileLikeItem({
               nickname={likerNickname}
               profileId={likerId}
               placeLabel={placeLabel}
+              distanceMeters={distanceMeters}
               relativeTime={relativeTime}
             />
           ) : null}

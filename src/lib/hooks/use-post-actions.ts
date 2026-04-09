@@ -4,14 +4,9 @@ import {
   useCallback,
   useRef,
   useState,
-  type RefObject,
 } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
-import {
-  getCachedBrowserCoordinates,
-  getCurrentBrowserCoordinates,
-  getGeoErrorMessage,
-} from "@/lib/geo/browser-location";
+import { resolveCoordinatesWithRef } from "@/lib/geo/resolve-coordinates";
 import {
   getGeocodingErrorMessage,
 } from "@/lib/geo/reverse-geocode";
@@ -36,7 +31,7 @@ type Actions<TItem extends LikeablePostItem, TRemovedItem> = {
   updateItem: (postId: string, patch: Partial<TItem>) => void;
   removeItemOptimistic: (postId: string) => RemovedItemSnapshot<TRemovedItem> | null;
   restoreRemovedItem: (snapshot: RemovedItemSnapshot<TRemovedItem>) => void;
-  coordsRef: RefObject<Coordinates | null>;
+  coordsRef: { current: Coordinates | null };
   onLocationError?: (message: string) => void;
   onActionError?: (message: string) => void;
 };
@@ -70,23 +65,18 @@ export function usePostActions<
   });
 
   const resolveCoordinates = useCallback(async (): Promise<Coordinates | null> => {
-    if (coordsRef.current) return coordsRef.current;
+    const coordinateResult = await resolveCoordinatesWithRef({
+      coordsRef,
+      context: "like",
+      errorContext: "like",
+    });
 
-    const cached = getCachedBrowserCoordinates();
-    if (cached) {
-      coordsRef.current = cached;
-      return cached;
-    }
-
-    try {
-      const coords = await getCurrentBrowserCoordinates({ context: "like" });
-      coordsRef.current = coords;
-      return coords;
-    } catch (error) {
-      const message = getGeoErrorMessage(error, "like");
-      onLocationError?.(message);
+    if (!coordinateResult.ok) {
+      onLocationError?.(coordinateResult.message);
       return null;
     }
+
+    return coordinateResult.coords;
   }, [coordsRef, onLocationError]);
 
   const resolveLikePlaceLabel = useCallback(

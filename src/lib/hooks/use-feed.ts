@@ -1,14 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/types/domain";
 import {
-  getCachedBrowserCoordinates,
-  getCurrentBrowserCoordinates,
   getGeoErrorMessage,
   isGeoPermissionDenied,
   type Coordinates,
 } from "@/lib/geo/browser-location";
+import { resolveCoordinatesWithRef } from "@/lib/geo/resolve-coordinates";
 import { fetchFeedState, fetchNearbyFeed } from "@/lib/api/feed-client";
 import {
   usePaginatedList,
@@ -23,16 +22,7 @@ import {
   type RemovedItemSnapshot,
 } from "./optimistic-removal";
 
-// ---------------------------
-// 타입
-// ---------------------------
-
-export type FeedStatus =
-  | "idle"
-  | "locating"
-  | "loading"
-  | "success"
-  | "error";
+export type FeedStatus = "idle" | "locating" | "loading" | "success" | "error";
 
 export type FeedHookState = {
   status: FeedStatus;
@@ -45,10 +35,6 @@ export type FeedHookState = {
 
 const FEED_VISIBLE_POLL_INTERVAL_MS = 60_000;
 const FEED_VISIBLE_POLL_MAX_INTERVAL_MS = 5 * 60_000;
-
-// ---------------------------
-// 훅
-// ---------------------------
 
 export function useFeed() {
   const [status, setStatus] = useState<FeedStatus>("idle");
@@ -102,7 +88,6 @@ export function useFeed() {
     initialLoading: false,
   });
 
-  // 피드 로드 (초기 또는 새로고침)
   const loadFeed = useCallback(
     async (coords: Coordinates, options?: { silent?: boolean }) => {
       if (!mountedRef.current) return false;
@@ -116,7 +101,6 @@ export function useFeed() {
       }
 
       const ok = await loadFirstPage();
-
       if (!mountedRef.current) return false;
 
       if (silent) {
@@ -134,53 +118,57 @@ export function useFeed() {
       setStatus(ok ? "success" : "error");
       return ok;
     },
-    [loadFirstPage],
+    [loadFirstPage, mountedRef],
   );
 
   const refreshFeedFromBrowserCoordinates = useCallback(async () => {
-    try {
-      const coords = await getCurrentBrowserCoordinates({ context: "feed" });
-      if (!mountedRef.current) return;
-      await loadFeed(coords, { silent: true });
-    } catch {
-      // 백그라운드 위치 갱신 실패는 사용자 흐름을 막지 않는다.
-    }
+    const coordinateResult = await resolveCoordinatesWithRef({
+      coordsRef,
+      context: "feed",
+      allowRef: false,
+      allowCached: false,
+    });
+
+    if (!coordinateResult.ok || !mountedRef.current) return;
+    await loadFeed(coordinateResult.coords, { silent: true });
   }, [loadFeed, mountedRef]);
 
-  // 초기화: 위치 요청 -> 피드 로드
   const initFeed = useCallback(async () => {
     if (!mountedRef.current) return;
+
     setStatus("locating");
     setLocationDenied(false);
     setLocationErrorMessage(null);
 
-    const cachedCoords = getCachedBrowserCoordinates();
-    if (cachedCoords) {
-      await loadFeed(cachedCoords);
+    const coordinateResult = await resolveCoordinatesWithRef({
+      coordsRef,
+      context: "feed",
+    });
+
+    if (!mountedRef.current) return;
+
+    if (coordinateResult.ok) {
+      await loadFeed(coordinateResult.coords);
       if (!mountedRef.current) return;
-      void refreshFeedFromBrowserCoordinates();
+
+      if (coordinateResult.source === "cache") {
+        void refreshFeedFromBrowserCoordinates();
+      }
       return;
     }
 
-    try {
-      const coords = await getCurrentBrowserCoordinates({ context: "feed" });
-      if (!mountedRef.current) return;
-      await loadFeed(coords);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      if (isGeoPermissionDenied(err)) {
-        setStatus("error");
-        setLocationDenied(true);
-        setLocationErrorMessage(null);
-      } else {
-        setStatus("error");
-        setLocationDenied(false);
-        setLocationErrorMessage(getGeoErrorMessage(err));
-      }
+    if (isGeoPermissionDenied(coordinateResult.error)) {
+      setStatus("error");
+      setLocationDenied(true);
+      setLocationErrorMessage(null);
+      return;
     }
-  }, [loadFeed, refreshFeedFromBrowserCoordinates, mountedRef]);
 
-  // 마운트 시 초기화
+    setStatus("error");
+    setLocationDenied(false);
+    setLocationErrorMessage(coordinateResult.message);
+  }, [loadFeed, mountedRef, refreshFeedFromBrowserCoordinates]);
+
   useEffect(() => {
     void initFeed();
   }, [initFeed]);
@@ -201,7 +189,7 @@ export function useFeed() {
       if (!coords) return;
 
       const stateResult = await fetchFeedState();
-      if (!stateResult.ok) return;
+      if (!stateResult.ok) return false;
 
       const latestStateVersion = stateResult.data.stateVersion;
       const previousStateVersion = feedStateVersionRef.current;
@@ -216,19 +204,17 @@ export function useFeed() {
       }
 
       const refreshed = await loadFeed(coords, { silent: true });
-      if (refreshed) {
-        feedStateVersionRef.current = latestStateVersion;
-      }
+      if (!refreshed) return false;
+
+      feedStateVersionRef.current = latestStateVersion;
     },
   });
 
-  // 더 보기 (커서 페이지네이션)
   const loadMore = useCallback(async () => {
     if (!coordsRef.current) return;
     await loadMorePage();
   }, [loadMorePage]);
 
-  // 아이템 낙관적 업데이트
   const updateItem = useCallback(
     (postId: string, patch: Partial<FeedItem>) => {
       mutateItems((items) =>
@@ -250,7 +236,6 @@ export function useFeed() {
       if (!snapshot) return null;
 
       mutateItems((items) => removeItemById(items, postId, (item) => item.postId));
-
       return snapshot;
     },
     [feedListState.items, mutateItems],
@@ -265,13 +250,16 @@ export function useFeed() {
     [mutateItems],
   );
 
-  const refresh = useCallback(async () => {
-    if (coordsRef.current) {
-      await loadFeed(coordsRef.current);
-    } else {
-      await initFeed();
-    }
-  }, [loadFeed, initFeed]);
+  const refresh = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (coordsRef.current) {
+        await loadFeed(coordsRef.current, options);
+      } else {
+        await initFeed();
+      }
+    },
+    [loadFeed, initFeed],
+  );
 
   const state: FeedHookState = {
     status,

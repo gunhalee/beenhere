@@ -21,6 +21,7 @@ export type CreatePostBody = {
   longitude:  number;
   // 앱에서 역지오코딩한 구(區) 수준 장소 라벨. 예: "마포구", "해운대구"
   placeLabel: string;
+  clientRequestId?: string;
 };
 
 export type CreatePostResponse = ApiResult<{ postId: string }>;
@@ -87,6 +88,9 @@ export type GetMyProfileResponse = ApiResult<{
   id:                 string;
   nickname:           string;
   nicknameChangedAt:  string | null;
+  isAnonymous?:       boolean;
+  googleLinked?:      boolean;
+  canLinkGoogle?:     boolean;
 }>;
 
 // PATCH /api/profiles/me (닉네임 재생성)
@@ -99,8 +103,10 @@ export type RegenerateMyNicknameResponse = ApiResult<{
 // GET /api/profiles/:userId/posts
 // ---------------------------
 export type GetProfilePostsQuery = {
-  cursor?: string;
-  limit?:  string;
+  cursor?:    string;
+  limit?:     string;
+  latitude?:  string;
+  longitude?: string;
 };
 
 export type GetProfilePostsResponse = ApiResult<{
@@ -111,6 +117,13 @@ export type GetProfilePostsResponse = ApiResult<{
 // ---------------------------
 // GET /api/profiles/:userId/likes
 // ---------------------------
+export type GetProfileLikesQuery = {
+  cursor?:    string;
+  limit?:     string;
+  latitude?:  string;
+  longitude?: string;
+};
+
 export type GetProfileLikesResponse = ApiResult<{
   items:      ProfileLikeItem[];
   nextCursor: string | null;

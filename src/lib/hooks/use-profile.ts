@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProfilePostItem, ProfileLikeItem, PostLikerItem } from "@/types/domain";
 import {
   fetchProfilePostsClient,
@@ -9,9 +9,9 @@ import {
 } from "@/lib/api/profile-client";
 import {
   usePaginatedList,
-  type PaginatedFetchResult,
   type PaginatedListState,
 } from "./use-paginated-list";
+import { createCursorPaginatedFetcher } from "./cursor-paginated-fetcher";
 import { useMountedRef } from "./use-mounted-ref";
 import {
   getRemovedItemSnapshot,
@@ -48,25 +48,19 @@ export function useProfile(userId: string, isMyProfile: boolean) {
     likersMapRef.current = likersMap;
   }, [likersMap]);
 
-  const fetchPostsPage = useCallback(
-    async (cursor?: string): Promise<PaginatedFetchResult<ProfilePostItem>> => {
-      const result = await fetchProfilePostsClient(userId, cursor);
-      if (!result.ok) {
-        return { ok: false, error: result.error };
-      }
-      return { ok: true, data: result.data };
-    },
+  const fetchPostsPage = useMemo(
+    () =>
+      createCursorPaginatedFetcher<ProfilePostItem>((cursor?: string) =>
+        fetchProfilePostsClient(userId, cursor),
+      ),
     [userId],
   );
 
-  const fetchLikesPage = useCallback(
-    async (cursor?: string): Promise<PaginatedFetchResult<ProfileLikeItem>> => {
-      const result = await fetchProfileLikesClient(userId, cursor);
-      if (!result.ok) {
-        return { ok: false, error: result.error };
-      }
-      return { ok: true, data: result.data };
-    },
+  const fetchLikesPage = useMemo(
+    () =>
+      createCursorPaginatedFetcher<ProfileLikeItem>((cursor?: string) =>
+        fetchProfileLikesClient(userId, cursor),
+      ),
     [userId],
   );
 

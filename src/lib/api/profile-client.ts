@@ -6,6 +6,7 @@ import { fetchApi } from "./client";
 import { API_ERROR_CODE, API_TIMEOUT_CODE } from "./common-errors";
 import type { ApiResult } from "@/types/api";
 import type { ProfilePostItem, ProfileLikeItem, PostLikerItem } from "@/types/domain";
+import { getCachedBrowserCoordinates } from "@/lib/geo/browser-location";
 
 const PROFILE_READ_TIMEOUT_MS = 3000;
 const PROFILE_WRITE_TIMEOUT_MS = 5000;
@@ -21,6 +22,9 @@ type MyProfileData = {
   id: string;
   nickname: string;
   nicknameChangedAt: string | null;
+  isAnonymous?: boolean;
+  googleLinked?: boolean;
+  canLinkGoogle?: boolean;
 };
 
 type CachedMyProfile = {
@@ -65,6 +69,14 @@ function setProfileCache(userId: string, data: PublicProfileData) {
     data,
     expiresAt: Date.now() + PROFILE_CACHE_TTL_MS,
   });
+}
+
+function appendCachedCoordinates(searchParams: URLSearchParams) {
+  const cachedCoords = getCachedBrowserCoordinates();
+  if (!cachedCoords) return;
+
+  searchParams.set("latitude", String(cachedCoords.latitude));
+  searchParams.set("longitude", String(cachedCoords.longitude));
 }
 
 export function clearMyProfileCache() {
@@ -195,6 +207,7 @@ export async function fetchProfilePostsClient(
 ) {
   const sp = new URLSearchParams({ limit: String(limit) });
   if (cursor) sp.set("cursor", cursor);
+  appendCachedCoordinates(sp);
 
   return fetchApi<{ items: ProfilePostItem[]; nextCursor: string | null }>(
     `/api/profiles/${userId}/posts?${sp.toString()}`,
@@ -217,6 +230,7 @@ export async function fetchProfileLikesClient(
 ) {
   const sp = new URLSearchParams({ limit: String(limit) });
   if (cursor) sp.set("cursor", cursor);
+  appendCachedCoordinates(sp);
 
   return fetchApi<{ items: ProfileLikeItem[]; nextCursor: string | null }>(
     `/api/profiles/${userId}/likes?${sp.toString()}`,

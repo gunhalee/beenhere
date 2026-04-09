@@ -5,7 +5,7 @@ import { useLatestRef } from "./use-latest-ref";
 
 type VisibilityAwarePollingCallback = (
   isCancelled: () => boolean,
-) => void | Promise<void>;
+) => void | boolean | Promise<void | boolean>;
 
 type UseVisiblePollingParams = {
   enabled: boolean;
@@ -87,8 +87,21 @@ export function useVisiblePolling({
       clearScheduledRun();
 
       try {
-        await onTickRef.current(() => cancelled);
-        consecutiveFailureCount = 0;
+        const tickResult = await onTickRef.current(() => cancelled);
+        const hasFailed = tickResult === false;
+
+        if (hasFailed) {
+          consecutiveFailureCount += 1;
+
+          if (label) {
+            console.warn(`[visible-polling] ${label}_failed`, {
+              consecutiveFailureCount,
+              message: "Polling tick returned failure signal.",
+            });
+          }
+        } else {
+          consecutiveFailureCount = 0;
+        }
       } catch (error) {
         consecutiveFailureCount += 1;
 

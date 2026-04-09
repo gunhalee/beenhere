@@ -15,6 +15,9 @@ export async function GET() {
       id: "mock-user-id",
       nickname: formatNicknameForDisplay(generateNickname()),
       nicknameChangedAt: null,
+      isAnonymous: false,
+      googleLinked: false,
+      canLinkGoogle: false,
     });
   }
 
@@ -27,6 +30,9 @@ export async function GET() {
     id: profile.id,
     nickname: profile.nickname,
     nicknameChangedAt: profile.nicknameChangedAt,
+    isAnonymous: profile.isAnonymous ?? false,
+    googleLinked: profile.googleLinked ?? false,
+    canLinkGoogle: profile.canLinkGoogle ?? false,
   });
 }
 
@@ -131,4 +137,3 @@ export async function POST(request: Request) {
 
   return ok({ nickname: formatNicknameForDisplay(nickname) });
 }
-

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProfilePostItem, PostLikerItem } from "@/types/domain";
+import { formatDistance } from "@/lib/geo/format-distance";
 import { LikersList } from "./likers-list";
 import { ProfileCard } from "./profile-card";
 import { ProfileItemMenu } from "./profile-item-menu";
@@ -31,9 +32,11 @@ export function ProfilePostItem({
   onDelete,
   onReport,
 }: Props) {
-  const { postId, content, placeLabel, relativeTime, likeCount } = item;
+  const { postId, content, placeLabel, distanceMeters, relativeTime, likeCount } = item;
   const isLikersExpanded = expandedLikersId === postId;
   const likersState = likersMap[postId];
+  const hasDistance =
+    distanceMeters != null && Number.isFinite(distanceMeters) && distanceMeters >= 0;
 
   const menuActions = isMyProfile
     ? [
@@ -72,12 +75,14 @@ export function ProfilePostItem({
             margin: 0,
           }}
         >
-          {placeLabel ? (
-            <span style={{ color: "#111827", fontWeight: 500 }}>
-              {placeLabel}
-              {" · "}
+          {placeLabel ? <span style={{ color: "#111827", fontWeight: 500 }}>{placeLabel}</span> : null}
+          {hasDistance ? (
+            <span>
+              {placeLabel ? " / " : null}
+              {formatDistance(distanceMeters as number)}
             </span>
           ) : null}
+          {placeLabel || hasDistance ? " / " : null}
           {relativeTime}
         </p>
 
@@ -100,9 +105,7 @@ export function ProfilePostItem({
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
-          aria-label={
-            isMyProfile ? "라이커 목록 펼치기" : `좋아요 ${likeCount}개`
-          }
+          aria-label={isMyProfile ? "좋아요 목록 펼치기" : `좋아요 ${likeCount}개`}
           aria-expanded={isLikersExpanded}
           disabled={!isMyProfile}
           onClick={() => isMyProfile && onLikeCountClick(postId)}
@@ -122,11 +125,11 @@ export function ProfilePostItem({
             padding: "4px 10px",
           }}
         >
-          <span style={{ fontSize: "13px" }}>♥</span>
+          <span style={{ fontSize: "13px" }}>좋아요</span>
           <span>{likeCount}</span>
           {isMyProfile ? (
             <span style={{ fontSize: "10px" }}>
-              {isLikersExpanded ? "▲" : "▼"}
+              {isLikersExpanded ? "접기" : "보기"}
             </span>
           ) : null}
         </button>

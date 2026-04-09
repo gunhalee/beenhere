@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchApi } from "./client";
+import { getCachedBrowserCoordinates } from "@/lib/geo/browser-location";
 import {
   clearProfileCache,
   clearMyProfileCache,
+  fetchProfileLikesClient,
   fetchProfileClient,
   fetchMyProfileClient,
+  fetchProfilePostsClient,
   updateMyProfileCacheNickname,
 } from "./profile-client";
 
 vi.mock("./client", () => ({
   fetchApi: vi.fn(),
+}));
+
+vi.mock("@/lib/geo/browser-location", () => ({
+  getCachedBrowserCoordinates: vi.fn(),
 }));
 
 type Deferred<T> = {
@@ -33,6 +40,7 @@ describe("profile-client my-profile cache", () => {
     vi.clearAllMocks();
     clearMyProfileCache();
     clearProfileCache();
+    vi.mocked(getCachedBrowserCoordinates).mockReturnValue(null);
   });
 
   it("returns cached response on repeated calls", async () => {
@@ -275,6 +283,7 @@ describe("profile-client public-profile cache", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearProfileCache();
+    vi.mocked(getCachedBrowserCoordinates).mockReturnValue(null);
   });
 
   it("caches repeated fetchProfileClient calls for same user", async () => {
@@ -432,5 +441,40 @@ describe("profile-client public-profile cache", () => {
     if (afterClear.ok) {
       expect(afterClear.data.nickname).toBe("User Fresh");
     }
+  });
+});
+
+describe("profile-client profile list coordinate forwarding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getCachedBrowserCoordinates).mockReturnValue(null);
+  });
+
+  it("adds cached coordinates to posts and likes queries", async () => {
+    vi.mocked(getCachedBrowserCoordinates).mockReturnValue({
+      latitude: 37.55,
+      longitude: 127.02,
+    });
+    vi.mocked(fetchApi).mockResolvedValue({
+      ok: true,
+      data: {
+        items: [],
+        nextCursor: null,
+      },
+    });
+
+    await fetchProfilePostsClient("user-1", "cursor-p1", 20);
+    await fetchProfileLikesClient("user-1", "cursor-l1", 10);
+
+    expect(fetchApi).toHaveBeenNthCalledWith(
+      1,
+      "/api/profiles/user-1/posts?limit=20&cursor=cursor-p1&latitude=37.55&longitude=127.02",
+      expect.any(Object),
+    );
+    expect(fetchApi).toHaveBeenNthCalledWith(
+      2,
+      "/api/profiles/user-1/likes?limit=10&cursor=cursor-l1&latitude=37.55&longitude=127.02",
+      expect.any(Object),
+    );
   });
 });

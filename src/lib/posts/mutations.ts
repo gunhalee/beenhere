@@ -18,6 +18,7 @@ type CreatePostInput = {
   latitude: number;
   longitude: number;
   placeLabel: string;
+  clientRequestId?: string;
 };
 
 type CreatePostResult =

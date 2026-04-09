@@ -25,7 +25,7 @@ vi.mock("@/lib/api/feed-client", () => ({
 
 type VisiblePollingParams = {
   enabled: boolean;
-  onTick: (isCancelled: () => boolean) => Promise<void> | void;
+  onTick: (isCancelled: () => boolean) => Promise<void | boolean> | void | boolean;
 };
 
 let latestPollingParams: VisiblePollingParams | null = null;
@@ -321,12 +321,14 @@ describe("useFeed", () => {
       expect(result.current.state.status).toBe("success");
     });
 
+    let tickResult: void | boolean | undefined;
     await act(async () => {
-      await latestPollingParams?.onTick(() => false);
+      tickResult = await latestPollingParams?.onTick(() => false);
     });
 
     expect(fetchFeedState).toHaveBeenCalledTimes(1);
     expect(fetchNearbyFeed).toHaveBeenCalledTimes(1);
+    expect(tickResult).toBe(false);
   });
 
   it("visible polling에서 stateVersion이 바뀌면 nearby를 다시 불러온다", async () => {
@@ -374,5 +376,44 @@ describe("useFeed", () => {
     expect(fetchFeedState).toHaveBeenCalledTimes(1);
     expect(fetchNearbyFeed).toHaveBeenCalledTimes(2);
     expect(result.current.state.items.map((item) => item.postId)).toEqual(["p1", "p2"]);
+  });
+
+  it("silent refresh keeps success flow and updates items", async () => {
+    vi.mocked(getCurrentBrowserCoordinates).mockResolvedValue({
+      latitude: 37.5,
+      longitude: 127.0,
+    });
+    vi.mocked(fetchNearbyFeed)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          items: [makeFeedItem("p1")],
+          nextCursor: null,
+          stateVersion: "v1",
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          items: [makeFeedItem("p1"), makeFeedItem("p2")],
+          nextCursor: null,
+          stateVersion: "v2",
+        },
+      });
+
+    const { result } = renderHook(() => useFeed());
+
+    await waitFor(() => {
+      expect(result.current.state.status).toBe("success");
+    });
+    expect(result.current.state.items.map((item) => item.postId)).toEqual(["p1"]);
+
+    await act(async () => {
+      await result.current.refresh({ silent: true });
+    });
+
+    expect(result.current.state.status).toBe("success");
+    expect(result.current.state.items.map((item) => item.postId)).toEqual(["p1", "p2"]);
+    expect(fetchNearbyFeed).toHaveBeenCalledTimes(2);
   });
 });

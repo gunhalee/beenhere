@@ -20,6 +20,42 @@ function clampLimit(raw: number | undefined): number {
   return Math.min(raw, MAX_PAGE_LIMIT);
 }
 
+function toNullableDistance(distanceMeters: number | null | undefined): number | null {
+  if (distanceMeters == null) return null;
+  const numericDistance = Number(distanceMeters);
+  if (!Number.isFinite(numericDistance) || numericDistance < 0) {
+    return null;
+  }
+  return numericDistance;
+}
+
+function hasLinkedProvider(
+  user: {
+    identities?: Array<{ provider?: string | null }> | null;
+    app_metadata?: { provider?: string | null; providers?: unknown } | null;
+  },
+  provider: string,
+): boolean {
+  const normalizedProvider = provider.toLowerCase();
+  const identityLinked = (user.identities ?? []).some(
+    (identity) => identity.provider?.toLowerCase() === normalizedProvider,
+  );
+
+  const appMetadataProvider =
+    typeof user.app_metadata?.provider === "string"
+      ? user.app_metadata.provider.toLowerCase()
+      : null;
+
+  const appMetadataProviders = Array.isArray(user.app_metadata?.providers)
+    ? user.app_metadata.providers
+    : [];
+  const metadataLinked = appMetadataProviders.some(
+    (value) => typeof value === "string" && value.toLowerCase() === normalizedProvider,
+  );
+
+  return identityLinked || appMetadataProvider === normalizedProvider || metadataLinked;
+}
+
 // ---------------------------
 // 프로필 조회
 // ---------------------------
@@ -61,11 +97,18 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 
   if (error || !data) return null;
 
+  const googleLinked = hasLinkedProvider(user, "google");
+  const isAnonymous = Boolean(user.is_anonymous);
+  const canLinkGoogle = !googleLinked;
+
   return {
     id: data.id as string,
     nickname: formatNicknameForDisplay(data.nickname as string),
     nicknameChangedAt: (data.nickname_changed_at as string | null) ?? null,
     createdAt: data.created_at as string,
+    isAnonymous,
+    googleLinked,
+    canLinkGoogle,
   };
 }
 
@@ -137,6 +180,8 @@ export async function getProfilePostsRepository(input: {
   userId: string;
   cursor?: string;
   limit?: number;
+  latitude?: number;
+  longitude?: number;
 }): Promise<{ items: ProfilePostItem[]; nextCursor: string | null }> {
   const limit = clampLimit(input.limit);
   const cursor = decodeCursor<ProfilePostsCursor>(input.cursor);
@@ -147,6 +192,8 @@ export async function getProfilePostsRepository(input: {
     cursor_post_id: cursor?.postId ?? null,
     cursor_created_at: cursor?.createdAt ?? null,
     result_limit: limit + 1,
+    viewer_lat: input.latitude ?? null,
+    viewer_lng: input.longitude ?? null,
   });
 
   if (error) throw error;
@@ -159,6 +206,7 @@ export async function getProfilePostsRepository(input: {
     postId: String(row.post_id),
     content: row.content,
     placeLabel: row.place_label ?? null,
+    distanceMeters: toNullableDistance(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),
     likeCount: Number(row.like_count),
     myLike: Boolean(row.my_like),
@@ -186,6 +234,8 @@ export async function getProfileLikesRepository(input: {
   userId: string;
   cursor?: string;
   limit?: number;
+  latitude?: number;
+  longitude?: number;
 }): Promise<{ items: ProfileLikeItem[]; nextCursor: string | null }> {
   const limit = clampLimit(input.limit);
   const cursor = decodeCursor<ProfileLikesCursor>(input.cursor);
@@ -196,6 +246,8 @@ export async function getProfileLikesRepository(input: {
     cursor_like_id: cursor?.likeId ?? null,
     cursor_created_at: cursor?.createdAt ?? null,
     result_limit: limit + 1,
+    viewer_lat: input.latitude ?? null,
+    viewer_lng: input.longitude ?? null,
   });
 
   if (error) throw error;
@@ -210,6 +262,7 @@ export async function getProfileLikesRepository(input: {
     authorId: String(row.author_id),
     authorNickname: formatNicknameForDisplay(row.author_nickname),
     placeLabel: row.place_label,
+    distanceMeters: toNullableDistance(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),
     likeCount: Number(row.like_count),
     myLike: Boolean(row.my_like),

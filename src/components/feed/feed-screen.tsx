@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import { fetchMyProfileClient } from "@/lib/api/profile-client";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
@@ -29,6 +29,10 @@ type ComposeState =
   | { open: false }
   | { open: true; coords: Coordinates };
 
+const PULL_TO_REFRESH_TRIGGER_PX = 64;
+const PULL_TO_REFRESH_MAX_PX = 92;
+const PULL_TO_REFRESH_DRAG_RATIO = 0.45;
+
 export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [resolvedCurrentUserId, setResolvedCurrentUserId] = useState<string | null>(
     currentUserId ?? null,
@@ -40,6 +44,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [composeLocating, setComposeLocating] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
   const [postActionError, setPostActionError] = useState<string | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullGestureActiveRef = useRef(false);
   const mountedRef = useMountedRef();
 
   const {
@@ -72,6 +82,10 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
 
   const locationAvailable = !state.locationDenied;
   const firstPlaceLabel = state.items[0]?.placeLabel ?? null;
+  const pullOffset = pullRefreshing
+    ? Math.max(pullDistance, PULL_TO_REFRESH_TRIGGER_PX)
+    : pullDistance;
+  const pullReady = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
 
   useEffect(() => {
     if (resolvedCurrentUserId && resolvedCurrentNickname) {
@@ -165,6 +179,77 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     [openReport],
   );
 
+  const resetPullGesture = useCallback(() => {
+    pullStartYRef.current = null;
+    pullGestureActiveRef.current = false;
+    if (mountedRef.current) {
+      setPullDistance(0);
+    }
+  }, [mountedRef]);
+
+  const canStartPullToRefresh = useCallback(() => {
+    if (pullRefreshing) return false;
+    if (state.status === "loading" || state.status === "locating") return false;
+    const container = scrollContainerRef.current;
+    if (!container) return false;
+    return container.scrollTop <= 0;
+  }, [pullRefreshing, state.status]);
+
+  const handleTouchStart = useCallback(
+    (event: TouchEvent<HTMLDivElement>) => {
+      if (!canStartPullToRefresh()) {
+        resetPullGesture();
+        return;
+      }
+      pullStartYRef.current = event.touches[0]?.clientY ?? null;
+      pullGestureActiveRef.current = pullStartYRef.current !== null;
+    },
+    [canStartPullToRefresh, resetPullGesture],
+  );
+
+  const handleTouchMove = useCallback(
+    (event: TouchEvent<HTMLDivElement>) => {
+      if (!pullGestureActiveRef.current) return;
+      if (pullStartYRef.current === null) return;
+
+      const currentY = event.touches[0]?.clientY;
+      if (typeof currentY !== "number") return;
+
+      const rawDistance = currentY - pullStartYRef.current;
+      if (rawDistance <= 0) {
+        setPullDistance(0);
+        return;
+      }
+
+      const easedDistance = Math.min(
+        PULL_TO_REFRESH_MAX_PX,
+        rawDistance * PULL_TO_REFRESH_DRAG_RATIO,
+      );
+      setPullDistance(easedDistance);
+    },
+    [],
+  );
+
+  const handleTouchEnd = useCallback(async () => {
+    if (!pullGestureActiveRef.current) {
+      resetPullGesture();
+      return;
+    }
+
+    const shouldRefresh = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
+    resetPullGesture();
+
+    if (!shouldRefresh || pullRefreshing) {
+      return;
+    }
+
+    setPullRefreshing(true);
+    await refresh({ silent: true });
+    if (mountedRef.current) {
+      setPullRefreshing(false);
+    }
+  }, [mountedRef, pullDistance, pullRefreshing, refresh, resetPullGesture]);
+
   return (
     <div
       style={{
@@ -225,14 +310,45 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       ) : null}
 
       <div
+        ref={scrollContainerRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={() => {
+          void handleTouchEnd();
+        }}
+        onTouchCancel={() => {
+          void handleTouchEnd();
+        }}
         style={{
           flex: 1,
           overflowY: "auto",
           overscrollBehaviorY: "contain",
           padding: "16px 16px 100px",
+          touchAction: "pan-y",
           WebkitOverflowScrolling: "touch",
         }}
       >
+        <div
+          aria-hidden={!pullOffset}
+          style={{
+            alignItems: "center",
+            color: "#6b7280",
+            display: "flex",
+            fontSize: "12px",
+            fontWeight: 600,
+            height: pullOffset ? `${pullOffset}px` : 0,
+            justifyContent: "center",
+            opacity: pullOffset ? 1 : 0,
+            transition: pullRefreshing ? "height 0.2s ease, opacity 0.2s ease" : "none",
+          }}
+        >
+          {pullRefreshing
+            ? "새로고침 중..."
+            : pullReady
+              ? "놓으면 새로고침"
+              : "당겨서 새로고침"}
+        </div>
+
         <FeedList
           state={state}
           currentUserId={resolvedCurrentUserId}

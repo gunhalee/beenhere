@@ -14,11 +14,26 @@ export type CoordinateValidationResult =
       code: typeof API_ERROR_CODE.INVALID_LOCATION;
     };
 
+export type OptionalCoordinateValidationResult =
+  | {
+      ok: true;
+      data: {
+        latitude: number;
+        longitude: number;
+      } | null;
+    }
+  | {
+      ok: false;
+      message: string;
+      code: typeof API_ERROR_CODE.INVALID_LOCATION;
+    };
+
 type ParseCoordinatesOptions = {
   latitudeKeys: string[];
   longitudeKeys: string[];
   invalidMessage: string;
   outOfRangeMessage: string;
+  required?: boolean;
 };
 
 function pickParamValue(searchParams: URLSearchParams, keys: string[]) {
@@ -31,13 +46,26 @@ function pickParamValue(searchParams: URLSearchParams, keys: string[]) {
 
 export function parseCoordinatesFromSearchParams(
   searchParams: URLSearchParams,
+  options: ParseCoordinatesOptions & { required: false },
+): OptionalCoordinateValidationResult;
+export function parseCoordinatesFromSearchParams(
+  searchParams: URLSearchParams,
   options: ParseCoordinatesOptions,
-): CoordinateValidationResult {
-  const latitudeRaw = pickParamValue(searchParams, options.latitudeKeys) ?? "";
-  const longitudeRaw = pickParamValue(searchParams, options.longitudeKeys) ?? "";
+): CoordinateValidationResult;
+export function parseCoordinatesFromSearchParams(
+  searchParams: URLSearchParams,
+  options: ParseCoordinatesOptions,
+): CoordinateValidationResult | OptionalCoordinateValidationResult {
+  const latitudeRaw = pickParamValue(searchParams, options.latitudeKeys);
+  const longitudeRaw = pickParamValue(searchParams, options.longitudeKeys);
+  const required = options.required ?? true;
 
-  const latitude = parseFloat(latitudeRaw);
-  const longitude = parseFloat(longitudeRaw);
+  if (!required && latitudeRaw === null && longitudeRaw === null) {
+    return { ok: true, data: null };
+  }
+
+  const latitude = parseFloat(latitudeRaw ?? "");
+  const longitude = parseFloat(longitudeRaw ?? "");
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return {

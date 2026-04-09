@@ -10,12 +10,15 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
+
 export async function POST(request: Request) {
   const bodyResult = await readJsonBody<CreatePostBody>(request);
 
   if (!bodyResult.ok) return bodyResult.response;
 
   const { content, latitude, longitude, placeLabel } = bodyResult.body;
+  const clientRequestId = bodyResult.body.clientRequestId?.trim() || undefined;
 
   if (!content?.trim()) {
     return fail("내용을 입력해 주세요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
@@ -27,6 +30,14 @@ export async function POST(request: Request) {
 
   if (!placeLabel?.trim()) {
     return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
+  }
+
+  if (clientRequestId && !CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
+    return fail(
+      "clientRequestId is invalid.",
+      400,
+      API_ERROR_CODE.VALIDATION_ERROR,
+    );
   }
 
   if (hasSupabaseBrowserConfig()) {
@@ -45,7 +56,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await createPost({ content, latitude, longitude, placeLabel });
+    const result = await createPost({
+      content,
+      latitude,
+      longitude,
+      placeLabel,
+      clientRequestId,
+    });
 
     if (!result.ok) {
       return fail(result.message, 400, result.code);

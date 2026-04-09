@@ -483,3 +483,123 @@ CI:
   - moderation repository not-found throws (`REPORT_NOT_FOUND`, `POST_NOT_FOUND`)
   - posts mutation RPC error map (`ALREADY_LIKED`, `CANNOT_LIKE_OWN`, `INVALID_REASON_CODE`)
   - reverse-geocode client error-code switch (`GEOCODE_*`, `TIMEOUT`, `NETWORK_ERROR`)
+
+## 26) Feed-State RPC Compatibility Fallback (2026-04-09)
+
+- `readFeedStateRepository` now treats missing feed-state RPC/table compatibility errors as recoverable:
+  - recognized compatibility signatures include `PGRST202`, `42883`, `42P01`, and function-missing message patterns.
+  - fallback path reads latest active post activity directly and returns legacy snapshot version format: `legacy:<last_activity_at>` (or `legacy:empty`).
+  - if fallback read also fails, repository returns `mock-static` snapshot instead of throwing.
+- `refreshFeedStateRepository` applies the same compatibility fallback behavior for missing `refresh_feed_state`.
+- Added repair migration:
+  - `supabase/migrations/0010_feed_state_rpc_compat_repair.sql`
+  - re-ensures `feed_state` table, `get_feed_state` / `refresh_feed_state` functions, and execute grants idempotently.
+
+## 27) Profile Distance Consistency (2026-04-09)
+
+- Profile post/like list APIs now accept optional viewer coordinates (`latitude`, `longitude`) and validate them with shared optional-coordinate parser.
+- `fetchProfilePostsClient` / `fetchProfileLikesClient` append cached browser coordinates when available, while preserving no-coordinate fallback behavior.
+- Profile repository + RPC contract now includes nullable `distanceMeters` / `distance_meters` for both posts and likes:
+  - coordinates present: distance is computed server-side from the recorded post/like location.
+  - coordinates absent: distance returns `null` and UI hides distance segment.
+- Added migration:
+  - `supabase/migrations/0011_profile_distance_consistency.sql`
+  - updates `get_profile_posts` / `get_profile_likes` signatures to include optional viewer coordinates and returns `distance_meters`, with matching execute grants.
+
+## 28) Coordinate Parser Unification (2026-04-09)
+
+- `src/lib/api/coordinates.ts` now uses one parser entrypoint:
+  - `parseCoordinatesFromSearchParams(...)`
+  - default mode (`required: true`): strict validation for required coordinate routes (feed/geo).
+  - optional mode (`required: false`): returns `{ ok: true, data: null }` when both coordinates are absent, while keeping the same validation/error behavior when one/both are present but invalid.
+- Profile posts/likes routes now call the same parser with `required: false` instead of a separate optional parser implementation.
+- Keep this rule for future routes:
+  - coordinate required route: omit `required` (or set `true`)
+  - coordinate optional route: set `required: false`
+
+## 29) Hook Modularization: Coordinate + Paginated Fetch (2026-04-09)
+
+- Introduced shared coordinate resolver:
+  - `src/lib/geo/resolve-coordinates.ts` (`resolveCoordinatesWithRef`)
+  - order: `ref -> cached -> browser`, with configurable `allowRef/allowCached/allowCurrent`
+  - returns structured result (`source`, `message`, raw `error`) so hooks can keep their own UX policy.
+- `use-feed` and `use-post-actions` now share the same coordinate resolution path:
+  - `use-feed` keeps existing behavior (permission denied branch + cached-first + background browser refresh).
+  - `use-post-actions` keeps existing behavior (location error callback on failure) but no longer duplicates ref/cache/browser logic.
+- Introduced shared paginated API adapter:
+  - `src/lib/hooks/cursor-paginated-fetcher.ts`
+  - `createCursorPaginatedFetcher` maps `ApiResult<{items,nextCursor}>` to `PaginatedFetchResult`.
+- `use-profile` now uses the shared adapter for both posts/likes page fetchers, removing duplicated success/error mapping.
+
+## 30) Guest Google Link Banner + Callback Flow (2026-04-09)
+
+- Added client-side Google OAuth starter utility:
+  - `src/lib/auth/google-oauth.ts`
+  - unified entrypoint for login (`signInWithOAuth`) and account linking (`linkIdentity`)
+  - always clears my-profile/public-profile client caches before redirect start.
+- Login page now uses the shared OAuth starter and handles immediate-start failure UI without leaving loading stuck:
+  - `src/app/auth/login/page.tsx`
+- OAuth callback route now supports explicit intent-based handling:
+  - `src/app/auth/callback/route.ts`
+  - `intent=link-google` branch returns to `next` path with `google_link=success|failed` (+ `google_link_reason` on failures)
+  - login branch behavior remains: profile missing -> `/onboarding`, profile exists -> `next`.
+- Extended my-profile contract with account-linking flags:
+  - `src/lib/profiles/repository.ts` infers `isAnonymous`, `googleLinked`, `canLinkGoogle` from auth user metadata/identities.
+  - `src/app/api/profiles/me/route.ts` returns those flags.
+  - type updates: `src/types/api.ts`, `src/types/domain.ts`, `src/lib/api/profile-client.ts`.
+- Profile screen now shows link flow UX:
+  - `src/lib/hooks/use-profile-context.ts` exposes viewer account-linking flags.
+  - `src/components/profile/profile-link-google-banner.tsx` new CTA banner component.
+  - `src/components/profile/profile-screen.tsx`:
+    - shows banner only when `isMyProfile && isAnonymous && !googleLinked && canLinkGoogle`
+    - starts `intent=link-google` flow
+    - shows success/error status message from callback query params.
+- Added/updated tests:
+  - `src/app/auth/callback/route.test.ts`
+  - `src/app/api/profiles/me/route.test.ts` (GET coverage expanded).
+
+## 31) Traffic Relief: Feed Dedupe, Poll Backoff Signal, Write Retry Safety (2026-04-09)
+
+- `src/lib/api/feed-client.ts` now applies read-path dedupe and short cache:
+  - `fetchFeedState`: in-flight dedupe + 2s TTL cache (with optional `force` bypass).
+  - `fetchNearbyFeed`: in-flight dedupe by request key (`lat/lng/cursor/limit`).
+- `use-visible-polling` now accepts a non-throw failure signal:
+  - `onTick` may return `false` to mark tick failure and trigger exponential backoff.
+  - throw behavior is unchanged and still counts as failure.
+- `use-feed` polling now returns `false` on transient read-refresh failure:
+  - `/api/feed/state` failure no longer silently resets backoff.
+  - state-version change refresh failure also triggers backoff progression.
+- Feed write clients now use single retry for retryable transport failures:
+  - applied to `createPostClient`, `likePostClient`, `reportPostClient`.
+  - retryable conditions: `NETWORK_ERROR` and write-timeout codes.
+- Post creation retry safety hardened via idempotency key:
+  - API contract adds optional `clientRequestId` on `CreatePostBody`.
+  - `/api/posts` validates format and passes through domain/repository.
+  - migration `supabase/migrations/0012_post_create_idempotency.sql`:
+    - adds `posts.client_request_id`
+    - adds unique index `(author_id, client_request_id)` (non-null)
+    - upgrades `create_post` RPC to return existing `post_id` on duplicate request key.
+- Added test coverage:
+  - `src/lib/api/feed-client.test.ts`
+  - `src/app/api/posts/route.test.ts`
+  - `src/lib/hooks/use-feed.test.tsx` (polling failure signal assertion).
+
+## 32) Integration Verification + Docs Closeout (BH-009, 2026-04-09)
+
+- Goal:
+  - close the execution loop for BH-001~BH-008 changes with reproducible verification evidence.
+- Commands executed:
+  - `npm run typecheck`
+  - `npm test`
+  - `npm run build`
+  - `npm test -- src/app/api`
+  - `npm run test:e2e`
+- Results:
+  - typecheck: pass
+  - unit/integration tests: pass (`22 files / 121 tests`)
+  - API route smoke set: pass (`9 files / 48 tests`)
+  - production build: pass
+  - Playwright smoke: pass (`e2e/smoke.spec.ts`, 2/2)
+- Notes:
+  - Playwright run showed Next.js dev warning about cross-origin dev origin for `127.0.0.1`; this is non-blocking for current behavior.
+  - If this warning needs to be eliminated in local-dev CI parity, configure `allowedDevOrigins` in `next.config.*`.

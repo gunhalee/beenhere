@@ -1,35 +1,41 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { clearMyProfileCache, clearProfileCache } from "@/lib/api/profile-client";
+import { useSearchParams } from "next/navigation";
+import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  missing_code: "로그인 코드가 유효하지 않아요. 다시 시도해 주세요.",
-  exchange_failed: "로그인 처리 중 오류가 발생했어요. 다시 시도해 주세요.",
+  missing_code: "The login code is missing or invalid. Please try again.",
+  exchange_failed: "We could not complete the login flow. Please try again.",
 };
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const errorKey = searchParams.get("error");
-  const errorMessage = errorKey ? (ERROR_MESSAGES[errorKey] ?? "로그인에 실패했어요. 다시 시도해 주세요.") : null;
+  const queryErrorMessage = errorKey
+    ? (ERROR_MESSAGES[errorKey] ?? "Login failed. Please try again.")
+    : null;
 
   const [loading, setLoading] = useState(false);
+  const [runtimeErrorMessage, setRuntimeErrorMessage] = useState<string | null>(
+    null,
+  );
+  const displayErrorMessage = runtimeErrorMessage ?? queryErrorMessage;
 
   async function handleGoogleLogin() {
     if (loading) return;
     setLoading(true);
-    clearMyProfileCache();
-    clearProfileCache();
+    setRuntimeErrorMessage(null);
 
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+    const result = await startGoogleOAuth({
+      intent: "login",
+      nextPath: "/",
     });
+
+    if (!result.ok) {
+      setLoading(false);
+      setRuntimeErrorMessage(result.error || "Login failed. Please try again.");
+    }
   }
 
   return (
@@ -42,7 +48,7 @@ function LoginForm() {
         width: "100%",
       }}
     >
-      {errorMessage ? (
+      {displayErrorMessage ? (
         <div
           role="alert"
           style={{
@@ -57,7 +63,7 @@ function LoginForm() {
             width: "100%",
           }}
         >
-          {errorMessage}
+          {displayErrorMessage}
         </div>
       ) : null}
 
@@ -85,7 +91,6 @@ function LoginForm() {
           width: "100%",
         }}
       >
-        {/* Google 로고 SVG */}
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
           <path
             fill="#4285F4"
@@ -104,7 +109,7 @@ function LoginForm() {
             d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"
           />
         </svg>
-        {loading ? "로그인 중…" : "Google로 계속하기"}
+        {loading ? "Signing in..." : "Continue with Google"}
       </button>
     </div>
   );
@@ -133,7 +138,6 @@ export default function LoginPage() {
           width: "100%",
         }}
       >
-        {/* 앱 소개 */}
         <div
           style={{
             alignItems: "center",
@@ -186,13 +190,12 @@ export default function LoginPage() {
                 margin: 0,
               }}
             >
-              글은 장소에 남고,
+              Leave words in places.
               <br />
-              사람은 글을 따라 발견된다.
+              Discover people by following stories.
             </p>
           </div>
 
-          {/* 핵심 컨셉 설명 */}
           <div
             style={{
               background: "#ffffff",
@@ -207,9 +210,9 @@ export default function LoginPage() {
             }}
           >
             {[
-              { icon: "📍", text: "내가 선 곳에서만 읽히는 글" },
-              { icon: "♡", text: "라이크는 곧 재공유, 글은 퍼져나간다" },
-              { icon: "→", text: "글을 따라 사람을 발견하는 경험" },
+              { icon: "•", text: "Nearby-first feed based on your location" },
+              { icon: "•", text: "Likes are shared with place context" },
+              { icon: "•", text: "Explore people through local posts" },
             ].map(({ icon, text }) => (
               <div
                 key={text}
@@ -234,7 +237,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* 로그인 버튼 (Suspense: searchParams 사용) */}
         <Suspense
           fallback={
             <button
@@ -253,7 +255,7 @@ export default function LoginPage() {
                 width: "100%",
               }}
             >
-              Google로 계속하기
+              Continue with Google
             </button>
           }
         >
@@ -269,9 +271,7 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          로그인하면 위치 기반 피드와
-          <br />
-          글 작성 기능을 이용할 수 있어요.
+          Login enables posting, liking, and profile features.
         </p>
       </div>
     </main>

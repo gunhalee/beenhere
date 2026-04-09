@@ -6,6 +6,7 @@ export async function createPostRepository(input: {
   latitude: number;
   longitude: number;
   placeLabel: string;
+  clientRequestId?: string;
 }): Promise<CreatePostRpcResult> {
   const supabase = await createSupabaseServerClient();
 
@@ -14,6 +15,7 @@ export async function createPostRepository(input: {
     p_latitude: input.latitude,
     p_longitude: input.longitude,
     p_place_label: input.placeLabel.trim(),
+    p_client_request_id: input.clientRequestId?.trim() || null,
   });
 
   if (error) throw error;
