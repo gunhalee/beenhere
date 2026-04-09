@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  generateNickname,
+  generateNicknameCandidates,
   NICKNAME_COOLDOWN_DAYS,
   canRegenerateNickname,
   daysUntilNicknameRegen,
@@ -31,5 +33,18 @@ describe("nickname cooldown", () => {
     expect(canRegenerateNickname(changedAt)).toBe(true);
     expect(daysUntilNicknameRegen(changedAt)).toBe(0);
   });
-});
 
+  it("generates korean-based nickname token pairs", () => {
+    const nickname = generateNickname();
+    expect(nickname).toMatch(/^[가-힣]+_[가-힣]+$/);
+  });
+
+  it("generates unique korean-based nickname candidates", () => {
+    const candidates = generateNicknameCandidates(3);
+    expect(candidates).toHaveLength(3);
+    expect(new Set(candidates).size).toBe(3);
+    candidates.forEach((candidate) => {
+      expect(candidate).toMatch(/^[가-힣]+_[가-힣]+$/);
+    });
+  });
+});

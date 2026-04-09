@@ -102,7 +102,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
   if (error || !data) {
     return {
       id: user.id,
-      nickname: formatNicknameForDisplay("guest"),
+      nickname: formatNicknameForDisplay("게스트"),
       nicknameChangedAt: null,
       createdAt: user.created_at ?? new Date().toISOString(),
       profileCreated: false,

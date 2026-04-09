@@ -11,7 +11,7 @@ export async function GET(_request: Request, context: Context) {
   const { userId } = await context.params;
 
   if (!hasSupabaseBrowserConfig()) {
-    return ok({ id: userId, nickname: formatNicknameForDisplay("mock_otter") });
+    return ok({ id: userId, nickname: formatNicknameForDisplay("샘플_수달") });
   }
 
   try {
@@ -29,7 +29,7 @@ export async function GET(_request: Request, context: Context) {
     if (user?.id === userId) {
       return ok({
         id: userId,
-        nickname: formatNicknameForDisplay("guest"),
+        nickname: formatNicknameForDisplay("게스트"),
       });
     }
 

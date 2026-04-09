@@ -5,27 +5,27 @@
  */
 
 const ADJECTIVES = [
-  "brave", "calm", "dark", "early", "fast",
-  "gentle", "happy", "idle", "jolly", "kind",
-  "lazy", "mild", "neat", "odd", "proud",
-  "quiet", "rare", "soft", "tiny", "vast",
-  "warm", "wild", "wise", "young", "zesty",
-  "amber", "azure", "bold", "crisp", "dusk",
-  "faint", "golden", "hazy", "ivory", "jade",
-  "lush", "mossy", "noble", "opal", "pale",
-  "rusty", "sandy", "swift", "teal", "urban",
+  "고요한", "따뜻한", "은은한", "반짝이는", "포근한",
+  "맑은", "산뜻한", "부드러운", "단단한", "차분한",
+  "선명한", "담대한", "느긋한", "활기찬", "싱그러운",
+  "느린", "빠른", "넓은", "깊은", "짙은",
+  "희미한", "반가운", "수줍은", "당찬", "명랑한",
+  "청량한", "순한", "빛나는", "청명한", "새벽의",
+  "노을빛", "별빛", "은빛", "바람결", "달콤한",
+  "상쾌한", "평온한", "다정한", "기민한", "영롱한",
+  "맑아진", "유연한", "튼튼한", "온화한", "깜찍한",
 ];
 
 const NOUNS = [
-  "bear", "bird", "cloud", "dawn", "echo",
-  "field", "fox", "grove", "hill", "isle",
-  "lake", "leaf", "moon", "moth", "mist",
-  "oak", "path", "pine", "rain", "reef",
-  "river", "rock", "rose", "sage", "sand",
-  "sea", "snow", "star", "stone", "storm",
-  "tide", "tree", "vale", "wave", "wind",
-  "wolf", "wood", "brook", "cliff", "cove",
-  "creek", "dune", "fern", "ford", "glade",
+  "고양이", "여우", "늑대", "바다", "강",
+  "호수", "구름", "별", "달", "바람",
+  "숲", "나무", "돌", "모래", "파도",
+  "노을", "새벽", "안개", "비", "눈",
+  "산", "들판", "해변", "골목", "등대",
+  "섬", "언덕", "꽃", "장미", "잎새",
+  "새", "곰", "토끼", "사슴", "고래",
+  "나비", "갈대", "시냇물", "절벽", "동굴",
+  "파랑새", "유성", "은하", "물안개", "바위",
 ];
 
 function pickRandom<T>(arr: T[]): T {
