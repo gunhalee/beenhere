@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { mergeGuestIntoMember } from "@/lib/auth/guest-upgrade";
 import {
+  buildGoogleCallbackUrl,
   GUEST_USER_ID_PARAM,
   sanitizeGuestUserId,
   sanitizeNextPath,
@@ -14,6 +15,8 @@ const LINK_STATUS_PARAM = "google_link";
 const LINK_REASON_PARAM = "google_link_reason";
 const UPGRADE_STATUS_PARAM = "upgrade";
 const UPGRADE_REASON_PARAM = "upgrade_reason";
+const IDENTITY_ALREADY_EXISTS_REASON = "identity_already_exists";
+const AUTO_SWITCH_FAILED_REASON = "auto_switch_failed";
 
 function normalizeReason(reason: string | null, fallback: string): string {
   if (!reason) return fallback;
@@ -52,6 +55,38 @@ function redirectWithUpgradeStatus(input: {
   return NextResponse.redirect(targetUrl.toString());
 }
 
+async function tryRedirectToGoogleLogin(input: {
+  origin: string;
+  nextPath: string;
+  guestUserId?: string | null;
+}) {
+  if (!hasSupabaseBrowserConfig()) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const redirectTo = buildGoogleCallbackUrl({
+    origin: input.origin,
+    intent: "login",
+    nextPath: input.nextPath,
+    guestUserId: input.guestUserId,
+  });
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+    },
+  });
+
+  if (error || !data?.url) {
+    return null;
+  }
+
+  return NextResponse.redirect(data.url);
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -68,11 +103,25 @@ export async function GET(request: Request) {
         searchParams.get("error_code") ?? searchParams.get("error"),
         "missing_code",
       );
+
+      if (reason === IDENTITY_ALREADY_EXISTS_REASON) {
+        const autoSwitchResponse = await tryRedirectToGoogleLogin({
+          origin,
+          nextPath,
+          guestUserId: previousGuestUserIdHint,
+        });
+
+        if (autoSwitchResponse) {
+          return autoSwitchResponse;
+        }
+      }
+
       return redirectWithLinkStatus({
         origin,
         nextPath,
         status: "failed",
-        reason,
+        reason:
+          reason === IDENTITY_ALREADY_EXISTS_REASON ? AUTO_SWITCH_FAILED_REASON : reason,
       });
     }
     return NextResponse.redirect(`${origin}/auth/login?error=missing_code`);
@@ -105,14 +154,29 @@ export async function GET(request: Request) {
   if (error) {
     if (isLinkGoogleIntent) {
       const exchangeError = error as { code?: string; message?: string };
+      const reason = normalizeReason(
+        exchangeError.code ?? exchangeError.message ?? null,
+        "exchange_failed",
+      );
+
+      if (reason === IDENTITY_ALREADY_EXISTS_REASON) {
+        const autoSwitchResponse = await tryRedirectToGoogleLogin({
+          origin,
+          nextPath,
+          guestUserId: previousGuestUserId,
+        });
+
+        if (autoSwitchResponse) {
+          return autoSwitchResponse;
+        }
+      }
+
       return redirectWithLinkStatus({
         origin,
         nextPath,
         status: "failed",
-        reason: normalizeReason(
-          exchangeError.code ?? exchangeError.message ?? null,
-          "exchange_failed",
-        ),
+        reason:
+          reason === IDENTITY_ALREADY_EXISTS_REASON ? AUTO_SWITCH_FAILED_REASON : reason,
       });
     }
     return NextResponse.redirect(`${origin}/auth/login?error=exchange_failed`);
@@ -139,7 +203,6 @@ export async function GET(request: Request) {
   let upgradeStatus: "merged" | "failed" | undefined;
   let upgradeReason: string | undefined;
   const canAttemptMerge =
-    !isLinkGoogleIntent &&
     previousGuestUserId &&
     previousGuestUserId !== user.id &&
     user.is_anonymous !== true;
@@ -159,6 +222,15 @@ export async function GET(request: Request) {
   }
 
   if (isLinkGoogleIntent) {
+    if (upgradeStatus) {
+      return redirectWithUpgradeStatus({
+        origin,
+        nextPath: `/profile/${user.id}`,
+        status: upgradeStatus,
+        reason: upgradeReason,
+      });
+    }
+
     return redirectWithLinkStatus({
       origin,
       nextPath,

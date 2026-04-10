@@ -45,6 +45,11 @@ const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
     tone: "error",
     message: "이미 다른 사용자에 연동된 Google 계정이에요. 자동 전환으로 데이터 병합을 진행할게요.",
   },
+  auto_switch_failed: {
+    tone: "error",
+    message:
+      "이미 다른 사용자에 연동된 Google 계정이에요. 자동 전환을 시작하지 못했어요. Google 로그인으로 다시 시도해 주세요.",
+  },
   exchange_failed: {
     tone: "error",
     message: "Google 계정 연동을 완료하지 못했어요. 다시 시도해 주세요.",
