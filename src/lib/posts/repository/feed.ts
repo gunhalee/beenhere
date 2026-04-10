@@ -18,6 +18,15 @@ function clampLimit(raw: number | undefined): number {
 }
 
 function rowToFeedItem(row: NearbyFeedRow): FeedItem {
+  const likerUserIds = Array.isArray(row.liker_user_ids)
+    ? row.liker_user_ids.map((userId) => String(userId))
+    : [];
+  const likerNicknames = Array.isArray(row.liker_nicknames)
+    ? row.liker_nicknames.map((nickname) =>
+        formatNicknameForDisplay(String(nickname)),
+      )
+    : [];
+
   return {
     postId: String(row.post_id),
     content: row.content,
@@ -25,6 +34,8 @@ function rowToFeedItem(row: NearbyFeedRow): FeedItem {
     authorNickname: formatNicknameForDisplay(row.author_nickname),
     lastSharerId: String(row.last_sharer_id),
     lastSharerNickname: formatNicknameForDisplay(row.last_sharer_nickname),
+    likerUserIds,
+    likerNicknames,
     placeLabel: row.place_label,
     distanceMeters: Number(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),

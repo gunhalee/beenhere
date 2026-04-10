@@ -44,6 +44,8 @@ function makeFeedItem(postId: string): FeedItem {
     authorNickname: "작성자",
     lastSharerId: "author-1",
     lastSharerNickname: "작성자",
+    likerUserIds: [],
+    likerNicknames: [],
     placeLabel: "강남구",
     distanceMeters: 120,
     relativeTime: "방금 전",

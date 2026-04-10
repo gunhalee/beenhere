@@ -7,6 +7,8 @@ export type NearbyFeedRow = {
   author_nickname: string;
   last_sharer_id: string;
   last_sharer_nickname: string;
+  liker_user_ids: string[];
+  liker_nicknames: string[];
   place_label: string;
   distance_meters: number;
   last_activity_at: string;

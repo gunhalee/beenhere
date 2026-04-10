@@ -151,6 +151,8 @@ export function ComposeSheet({
       authorNickname: currentNickname ?? "나",
       lastSharerId: currentUserId ?? "unknown",
       lastSharerNickname: currentNickname ?? "나",
+      likerUserIds: [],
+      likerNicknames: [],
       placeLabel,
       distanceMeters: 0,
       relativeTime: "방금 전",

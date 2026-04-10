@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { FeedItem } from "@/types/domain";
 import { FeedItemMenu } from "./feed-item-menu";
@@ -31,6 +32,8 @@ export function FeedItemCard({
     authorNickname,
     lastSharerId,
     lastSharerNickname,
+    likerUserIds,
+    likerNicknames,
     placeLabel,
     distanceMeters,
     relativeTime,
@@ -46,6 +49,15 @@ export function FeedItemCard({
   const authorPlaceLabel = originalPlaceLabel ?? placeLabel;
   const authorDistanceMeters = originalDistanceMeters ?? distanceMeters;
   const authorRelativeTime = originalRelativeTime ?? relativeTime;
+  const likerEntries =
+    likerNicknames.length > 0
+      ? likerNicknames.map((nickname, index) => ({
+          nickname,
+          userId: likerUserIds[index] ?? null,
+        }))
+      : !isSameSharer
+        ? [{ nickname: lastSharerNickname, userId: lastSharerId }]
+        : [];
 
   return (
     <article
@@ -139,15 +151,42 @@ export function FeedItemCard({
           }}
         >
           <div style={{ flex: 1, marginRight: "8px", minWidth: 0 }}>
-            {!isSameSharer ? (
-              <PostCardMetaRow
-                leadIn="Liked by "
-                nickname={lastSharerNickname}
-                profileId={lastSharerId}
-                placeLabel={placeLabel}
-                distanceMeters={distanceMeters}
-                relativeTime={relativeTime}
-              />
+            {likerEntries.length > 0 ? (
+              <p
+                style={{
+                  color: "#6b7280",
+                  fontSize: "11px",
+                  lineHeight: 1.45,
+                  margin: 0,
+                  wordBreak: "break-word",
+                }}
+              >
+                <span style={{ color: "#6b7280", fontWeight: 400 }}>
+                  Liked by{" "}
+                </span>
+                {likerEntries.map((liker, index) => (
+                  <span key={`${liker.userId ?? liker.nickname}-${index}`}>
+                    {index > 0 ? ", " : null}
+                    {liker.userId ? (
+                      <Link
+                        href={`/profile/${liker.userId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        style={{
+                          color: "#111827",
+                          fontWeight: 500,
+                          textDecoration: "none",
+                        }}
+                      >
+                        {liker.nickname}
+                      </Link>
+                    ) : (
+                      <span style={{ color: "#111827", fontWeight: 500 }}>
+                        {liker.nickname}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </p>
             ) : null}
           </div>
 

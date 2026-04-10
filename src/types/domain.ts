@@ -5,6 +5,8 @@ export type FeedItem = {
   authorNickname: string;
   lastSharerId: string;
   lastSharerNickname: string;
+  likerUserIds: string[];
+  likerNicknames: string[];
   placeLabel: string;
   distanceMeters: number;
   relativeTime: string;
