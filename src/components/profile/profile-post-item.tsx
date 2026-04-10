@@ -36,7 +36,7 @@ export function ProfilePostItem({
   onDelete,
   onReport,
 }: Props) {
-  const { postId, content, placeLabel, distanceMeters, relativeTime, likeCount } = item;
+  const { postId, content, placeLabel, distanceMeters, relativeTime, likeCount, myLike } = item;
   const isLikersExpanded = expandedLikersId === postId;
   const likersState = likersMap[postId];
 
@@ -119,7 +119,7 @@ export function ProfilePostItem({
             padding: "4px 10px",
           }}
         >
-          <span style={{ fontSize: "13px" }}>좋아요</span>
+          <span style={{ fontSize: "13px" }}>{myLike ? "♥" : "♡"}</span>
           <span>{likeCount}</span>
           {isMyProfile ? (
             <span style={{ fontSize: "10px" }}>
