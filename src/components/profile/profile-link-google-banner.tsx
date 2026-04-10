@@ -22,37 +22,46 @@ export function ProfileLinkGoogleBanner({
         padding: "14px 20px",
       }}
     >
-      <p
+      <div
         style={{
-          color: "#1e3a8a",
-          fontSize: "13px",
-          fontWeight: 600,
-          lineHeight: 1.5,
-          margin: 0,
+          alignItems: "center",
+          display: "flex",
+          gap: "10px",
+          justifyContent: "space-between",
         }}
       >
-        계정을 Google 계정과 연동하면 데이터가 유지됩니다.
-      </p>
-      <button
-        disabled={loading}
-        onClick={onClick}
-        type="button"
-        style={{
-          appearance: "none",
-          background: loading ? "#93c5fd" : "#2563eb",
-          border: "none",
-          borderRadius: "10px",
-          color: "#ffffff",
-          cursor: loading ? "default" : "pointer",
-          fontSize: "13px",
-          fontWeight: 700,
-          padding: "10px 12px",
-          width: "fit-content",
-          alignSelf: "flex-end",
-        }}
-      >
-        {loading ? "연동 준비 중..." : "Google 계정 연동"}
-      </button>
+        <p
+          style={{
+            color: "#1e3a8a",
+            flex: 1,
+            fontSize: "13px",
+            fontWeight: 600,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          Google 계정 연동으로 데이터를 유지하세요.
+        </p>
+        <button
+          disabled={loading}
+          onClick={onClick}
+          type="button"
+          style={{
+            appearance: "none",
+            background: loading ? "#93c5fd" : "#2563eb",
+            border: "none",
+            borderRadius: "10px",
+            color: "#ffffff",
+            cursor: loading ? "default" : "pointer",
+            flexShrink: 0,
+            fontSize: "13px",
+            fontWeight: 700,
+            padding: "10px 12px",
+          }}
+        >
+          {loading ? "연동 준비 중..." : "Google 계정 연동"}
+        </button>
+      </div>
 
       {errorMessage ? (
         <p

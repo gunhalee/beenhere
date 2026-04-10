@@ -38,15 +38,12 @@ type LinkResultTone = "success" | "error";
 type LinkResultMessage = {
   tone: LinkResultTone;
   message: string;
-  showSwitchToGoogle?: boolean;
 };
 
 const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
   identity_already_exists: {
     tone: "error",
-    message:
-      "이미 다른 사용자에 연동된 Google 계정이에요. 해당 Google 계정으로 전환할 수 있어요. 게스트 데이터는 자동 병합되지 않아요.",
-    showSwitchToGoogle: true,
+    message: "이미 다른 사용자에 연동된 Google 계정이에요. 자동 전환으로 데이터 병합을 진행할게요.",
   },
   exchange_failed: {
     tone: "error",
@@ -126,7 +123,6 @@ export function ProfileScreen({ userId }: Props) {
   const [likeError, setLikeError] = useState<string | null>(null);
   const [linkGoogleLoading, setLinkGoogleLoading] = useState(false);
   const [linkGoogleError, setLinkGoogleError] = useState<string | null>(null);
-  const [switchGoogleLoading, setSwitchGoogleLoading] = useState(false);
 
   const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
   const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
@@ -261,21 +257,6 @@ export function ProfileScreen({ userId }: Props) {
     }
   }, [linkGoogleLoading, userId]);
 
-  const handleSwitchToLinkedGoogle = useCallback(async () => {
-    if (switchGoogleLoading) return;
-
-    setSwitchGoogleLoading(true);
-    const result = await startGoogleOAuth({
-      intent: "login",
-      nextPath: `/profile/${userId}`,
-    });
-
-    if (!result.ok) {
-      setSwitchGoogleLoading(false);
-      setLikeError(result.error ?? "Google 로그인을 시작하지 못했어요.");
-    }
-  }, [switchGoogleLoading, userId]);
-
   const handleGuestContinue = useCallback(async () => {
     if (guestAuthLoading || googleAuthLoading) return;
 
@@ -391,30 +372,6 @@ export function ProfileScreen({ userId }: Props) {
           }}
         >
           <div>{linkResultMessage.message}</div>
-          {linkResultMessage.showSwitchToGoogle ? (
-            <button
-              onClick={() => {
-                void handleSwitchToLinkedGoogle();
-              }}
-              type="button"
-              style={{
-                appearance: "none",
-                background: "none",
-                border: "none",
-                color: "#1d4ed8",
-                cursor: switchGoogleLoading ? "default" : "pointer",
-                fontSize: "13px",
-                fontWeight: 600,
-                marginTop: "6px",
-                padding: 0,
-                textDecoration: "underline",
-              }}
-            >
-              {switchGoogleLoading
-                ? "계정 전환 중..."
-                : "해당 Google 계정으로 로그인"}
-            </button>
-          ) : null}
         </div>
       ) : null}
 

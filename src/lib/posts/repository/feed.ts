@@ -9,6 +9,8 @@ import { decodeFeedCursor, encodeFeedCursor } from "./cursor";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
+// Temporary override: relax nearby feed distance cap to effectively global.
+const FEED_RADIUS_METERS = 40_000_000;
 
 function clampLimit(raw: number | undefined): number {
   if (!raw || !Number.isFinite(raw) || raw < 1) return DEFAULT_LIMIT;
@@ -48,7 +50,7 @@ export async function loadNearbyFeedRepository(input: {
   const { data, error } = await supabase.rpc("list_nearby_feed", {
     viewer_lat: input.latitude,
     viewer_lng: input.longitude,
-    radius_meters: 10000,
+    radius_meters: FEED_RADIUS_METERS,
     cursor_distance_meters: cursor?.distanceMeters ?? null,
     cursor_last_activity_at: cursor?.lastActivityAt ?? null,
     cursor_post_id: cursor?.postId ?? null,

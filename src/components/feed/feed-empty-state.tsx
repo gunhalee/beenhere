@@ -1,4 +1,4 @@
-type Props = {
+﻿type Props = {
   onCompose?: () => void;
 };
 
@@ -23,9 +23,9 @@ export function FeedEmptyState({ onCompose }: Props) {
           lineHeight: 1.5,
         }}
       >
-        이 지역의 첫 번째
+        ??吏??쓽 泥?踰덉㎏
         <br />
-        이야기를 남겨보세요
+        ?댁빞湲곕? ?④꺼蹂댁꽭??
       </p>
       <p
         style={{
@@ -35,9 +35,9 @@ export function FeedEmptyState({ onCompose }: Props) {
           margin: 0,
         }}
       >
-        10km 안에 아직 글이 없어요.
+        주변 ?덉뿉 ?꾩쭅 湲???놁뼱??
         <br />
-        이곳에서 첫 흔적을 남겨보세요.
+        ?닿납?먯꽌 泥??붿쟻???④꺼蹂댁꽭??
       </p>
       {onCompose ? (
         <button
@@ -55,9 +55,10 @@ export function FeedEmptyState({ onCompose }: Props) {
             padding: "12px 28px",
           }}
         >
-          글 남기기
+          湲 ?④린湲?
         </button>
       ) : null}
     </div>
   );
 }
+
