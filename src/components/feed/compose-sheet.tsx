@@ -246,7 +246,8 @@ export function ComposeSheet({
                   color: "#111827",
                   fontSize: "15px",
                   fontWeight: 700,
-                  margin: "0 0 2px",
+                  lineHeight: "32px",
+                  margin: "0",
                 }}
               >
                 이 장소에 글 남기기 · {placeLabel}
@@ -257,21 +258,26 @@ export function ComposeSheet({
               onClick={onDismiss}
               type="button"
               style={{
+                alignItems: "center",
                 appearance: "none",
-                background: "#f3f4f6",
+                background: "transparent",
                 border: "none",
-                borderRadius: "9999px",
-                color: "#6b7280",
                 cursor: "pointer",
-                fontSize: "18px",
+                display: "flex",
+                flexShrink: 0,
                 height: "32px",
-                lineHeight: "32px",
+                justifyContent: "center",
                 padding: 0,
-                textAlign: "center",
                 width: "32px",
               }}
             >
-              X
+              <img
+                src="/images/close-button.png"
+                alt=""
+                width={24}
+                height={24}
+                style={{ display: "block" }}
+              />
             </button>
           </div>
 
