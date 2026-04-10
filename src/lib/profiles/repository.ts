@@ -279,9 +279,12 @@ export async function getProfileLikesRepository(input: {
     content: row.content,
     authorId: String(row.author_id),
     authorNickname: formatNicknameForDisplay(row.author_nickname),
-    placeLabel: row.place_label,
+    placeLabel: row.place_label ?? null,
     distanceMeters: toNullableDistance(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),
+    likePlaceLabel: row.like_place_label ?? null,
+    likeDistanceMeters: toNullableDistance(row.like_distance_meters),
+    likeRelativeTime: formatRelativeTime(row.like_created_at),
     likeCount: Number(row.like_count),
     myLike: Boolean(row.my_like),
   }));

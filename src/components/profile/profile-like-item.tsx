@@ -28,11 +28,17 @@ export function ProfileLikeItem({
     placeLabel,
     distanceMeters,
     relativeTime,
+    likePlaceLabel,
+    likeDistanceMeters,
+    likeRelativeTime,
     likeCount,
     myLike,
   } = item;
 
   const isSameSharer = authorId === likerId;
+  const likedPlaceLabel = likePlaceLabel ?? placeLabel;
+  const likedDistanceMeters = likeDistanceMeters ?? distanceMeters;
+  const likedRelativeTime = likeRelativeTime ?? relativeTime;
 
   return (
     <ProfileCard>
@@ -97,9 +103,9 @@ export function ProfileLikeItem({
               nickname={likerNickname}
               profileId={likerId}
               disableProfileLink
-              placeLabel={placeLabel}
-              distanceMeters={distanceMeters}
-              relativeTime={relativeTime}
+              placeLabel={likedPlaceLabel}
+              distanceMeters={likedDistanceMeters}
+              relativeTime={likedRelativeTime}
             />
           ) : null}
         </div>

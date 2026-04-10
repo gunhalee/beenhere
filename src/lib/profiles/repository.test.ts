@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getMyProfileRepository } from "./repository";
+import { getMyProfileRepository, getProfileLikesRepository } from "./repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
 
@@ -89,5 +89,56 @@ describe("profiles repository", () => {
     const result = await getMyProfileRepository();
 
     expect(result).toBeNull();
+  });
+
+  it("maps post metadata separately from like metadata in liked posts", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "post-1",
+          content: "hello",
+          author_id: "author-1",
+          author_nickname: "writer",
+          place_label: "Mapo-gu",
+          distance_meters: 1234,
+          last_activity_at: "2026-04-01T00:00:00.000Z",
+          like_id: "like-1",
+          like_created_at: "2026-04-02T00:00:00.000Z",
+          like_place_label: "Gangnam-gu",
+          like_distance_meters: 222,
+          like_count: 7,
+          my_like: true,
+        },
+      ],
+      error: null,
+    });
+
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      rpc,
+    } as never);
+
+    const result = await getProfileLikesRepository({
+      userId: "user-1",
+      limit: 20,
+    });
+
+    expect(rpc).toHaveBeenCalledWith(
+      "get_profile_likes",
+      expect.objectContaining({
+        target_user_id: "user-1",
+      }),
+    );
+
+    expect(result.items[0]).toMatchObject({
+      postId: "post-1",
+      placeLabel: "Mapo-gu",
+      distanceMeters: 1234,
+      likePlaceLabel: "Gangnam-gu",
+      likeDistanceMeters: 222,
+      likeCount: 7,
+      myLike: true,
+    });
+    expect(typeof result.items[0]?.relativeTime).toBe("string");
+    expect(typeof result.items[0]?.likeRelativeTime).toBe("string");
   });
 });

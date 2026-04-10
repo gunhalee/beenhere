@@ -200,6 +200,29 @@ describe("GET /auth/callback", () => {
     });
   });
 
+  it("redirects to merged member profile when login callback next path points to guest profile", async () => {
+    mockCallbackSupabase({
+      previousUserId: "guest-1",
+      previousUserAnonymous: true,
+      currentUserId: "member-1",
+      currentUserAnonymous: false,
+    });
+
+    const request = new Request(
+      "http://localhost/auth/callback?code=abc123&next=%2Fprofile%2Fguest-1",
+    );
+
+    const response = await GET(request);
+    const location = response.headers.get("location");
+
+    expect(response.status).toBe(307);
+    expect(location).toBe("http://localhost/profile/member-1?upgrade=merged");
+    expect(mergeGuestIntoMember).toHaveBeenCalledWith({
+      guestUserId: "guest-1",
+      memberUserId: "member-1",
+    });
+  });
+
   it("redirects with failed upgrade reason when merge fails", async () => {
     mockCallbackSupabase({
       previousUserId: "guest-1",

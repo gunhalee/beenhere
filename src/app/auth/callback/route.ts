@@ -55,6 +55,26 @@ function redirectWithUpgradeStatus(input: {
   return NextResponse.redirect(targetUrl.toString());
 }
 
+function resolveNextPathAfterUpgrade(input: {
+  origin: string;
+  nextPath: string;
+  previousGuestUserId: string | null;
+  currentUserId: string;
+  status?: "merged" | "failed";
+}) {
+  if (!input.status || !input.previousGuestUserId) {
+    return input.nextPath;
+  }
+
+  const targetUrl = new URL(input.nextPath, input.origin);
+  if (targetUrl.pathname !== `/profile/${input.previousGuestUserId}`) {
+    return input.nextPath;
+  }
+
+  targetUrl.pathname = `/profile/${input.currentUserId}`;
+  return `${targetUrl.pathname}${targetUrl.search}`;
+}
+
 async function tryRedirectToGoogleLogin(input: {
   origin: string;
   nextPath: string;
@@ -240,7 +260,13 @@ export async function GET(request: Request) {
 
   return redirectWithUpgradeStatus({
     origin,
-    nextPath,
+    nextPath: resolveNextPathAfterUpgrade({
+      origin,
+      nextPath,
+      previousGuestUserId,
+      currentUserId: user.id,
+      status: upgradeStatus,
+    }),
     status: upgradeStatus,
     reason: upgradeReason,
   });

@@ -30,11 +30,13 @@ export type ProfileLikeRow = {
   content: string;
   author_id: string;
   author_nickname: string;
-  place_label: string;
+  place_label: string | null;
   distance_meters: number | null;
   last_activity_at: string;
   like_id: string;
   like_created_at: string;
+  like_place_label: string | null;
+  like_distance_meters: number | null;
   like_count: number;
   my_like: boolean;
 };

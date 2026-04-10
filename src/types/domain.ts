@@ -47,9 +47,12 @@ export type ProfileLikeItem = {
   content: string;
   authorId: string;
   authorNickname: string;
-  placeLabel: string;
+  placeLabel: string | null;
   distanceMeters: number | null;
   relativeTime: string;
+  likePlaceLabel?: string | null;
+  likeDistanceMeters?: number | null;
+  likeRelativeTime?: string;
   likeCount: number;
   myLike: boolean;
 };
