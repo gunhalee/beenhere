@@ -10,6 +10,9 @@ export type NearbyFeedRow = {
   place_label: string;
   distance_meters: number;
   last_activity_at: string;
+  original_place_label: string | null;
+  original_distance_meters: number | null;
+  original_created_at: string;
   like_count: number;
   my_like: boolean;
 };

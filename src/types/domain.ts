@@ -8,6 +8,9 @@ export type FeedItem = {
   placeLabel: string;
   distanceMeters: number;
   relativeTime: string;
+  originalPlaceLabel?: string | null;
+  originalDistanceMeters?: number | null;
+  originalRelativeTime?: string;
   likeCount: number;
   myLike: boolean;
 };

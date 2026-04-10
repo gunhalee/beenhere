@@ -34,12 +34,18 @@ export function FeedItemCard({
     placeLabel,
     distanceMeters,
     relativeTime,
+    originalPlaceLabel,
+    originalDistanceMeters,
+    originalRelativeTime,
     likeCount,
     myLike,
   } = item;
 
   const isAuthor = currentUserId === authorId;
   const isSameSharer = lastSharerId === authorId;
+  const authorPlaceLabel = originalPlaceLabel ?? placeLabel;
+  const authorDistanceMeters = originalDistanceMeters ?? distanceMeters;
+  const authorRelativeTime = originalRelativeTime ?? relativeTime;
 
   return (
     <article
@@ -72,9 +78,9 @@ export function FeedItemCard({
             <PostCardMetaRow
               nickname={authorNickname}
               profileId={authorId}
-              placeLabel={placeLabel}
-              distanceMeters={distanceMeters}
-              relativeTime={relativeTime}
+              placeLabel={authorPlaceLabel}
+              distanceMeters={authorDistanceMeters}
+              relativeTime={authorRelativeTime}
             />
           </div>
 

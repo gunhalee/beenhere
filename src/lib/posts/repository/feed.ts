@@ -28,6 +28,12 @@ function rowToFeedItem(row: NearbyFeedRow): FeedItem {
     placeLabel: row.place_label,
     distanceMeters: Number(row.distance_meters),
     relativeTime: formatRelativeTime(row.last_activity_at),
+    originalPlaceLabel: row.original_place_label ?? null,
+    originalDistanceMeters:
+      row.original_distance_meters == null
+        ? null
+        : Number(row.original_distance_meters),
+    originalRelativeTime: formatRelativeTime(row.original_created_at),
     likeCount: Number(row.like_count),
     myLike: Boolean(row.my_like),
   };
