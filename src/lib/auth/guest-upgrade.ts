@@ -20,14 +20,6 @@ type MergeGuestIntoMemberResult =
       code?: string;
     };
 
-function isCompatibilityMissingError(error: { code?: string; message?: string } | null) {
-  if (!error) return false;
-  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
-    return true;
-  }
-  return /merge_guest_account/i.test(error.message ?? "");
-}
-
 export async function mergeGuestIntoMember(
   input: MergeGuestIntoMemberInput,
 ): Promise<MergeGuestIntoMemberResult> {
@@ -38,14 +30,6 @@ export async function mergeGuestIntoMember(
   });
 
   if (error) {
-    if (isCompatibilityMissingError(error)) {
-      return {
-        ok: false,
-        error: "게스트 전환 함수가 아직 배포되지 않았어요.",
-        code: error.code,
-      };
-    }
-
     return {
       ok: false,
       error: error.message ?? "게스트 계정 전환 중 오류가 발생했어요.",

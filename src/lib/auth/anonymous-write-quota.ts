@@ -17,14 +17,6 @@ type ConsumeQuotaResult = {
 const ANONYMOUS_WRITE_LIMIT = 10;
 const ANONYMOUS_WRITE_WINDOW_SECONDS = 60;
 
-function isCompatibilityMissingError(error: { code?: string; message?: string } | null) {
-  if (!error) return false;
-  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
-    return true;
-  }
-  return /consume_anonymous_write_quota/i.test(error.message ?? "");
-}
-
 export async function consumeAnonymousWriteQuota({
   supabase,
   userId,
@@ -40,12 +32,7 @@ export async function consumeAnonymousWriteQuota({
     p_window_seconds: ANONYMOUS_WRITE_WINDOW_SECONDS,
   });
 
-  if (error) {
-    if (isCompatibilityMissingError(error)) {
-      return { allowed: true, remaining: Number.MAX_SAFE_INTEGER, resetAt: null };
-    }
-    throw error;
-  }
+  if (error) throw error;
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row || typeof row !== "object") {

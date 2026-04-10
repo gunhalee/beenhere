@@ -32,15 +32,23 @@ describe("useProfileContext", () => {
     vi.clearAllMocks();
   });
 
-  it("공개 프로필이 준비되면 내 프로필 응답을 기다리지 않고 ready로 전환한다", async () => {
+  it("sets public profile to ready without waiting for viewer profile", async () => {
     const myProfileDeferred = createDeferred<{
       ok: true;
-      data: { id: string; nickname: string; nicknameChangedAt: string | null };
+      data: {
+        id: string;
+        nickname: string;
+        nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
+      };
     }>();
 
     vi.mocked(fetchProfileClient).mockResolvedValue({
       ok: true,
-      data: { id: "user-1", nickname: "테스터" },
+      data: { id: "user-1", nickname: "Tester" },
     });
     vi.mocked(fetchMyProfileClient).mockReturnValue(myProfileDeferred.promise);
 
@@ -49,29 +57,45 @@ describe("useProfileContext", () => {
     await waitFor(() => {
       expect(result.current.profileLoadState).toBe("ready");
     });
-    expect(fetchMyProfileClient).toHaveBeenCalledWith({ force: true });
+    expect(fetchMyProfileClient).toHaveBeenCalledWith();
 
-    expect(result.current.nickname).toBe("테스터");
+    expect(result.current.nickname).toBe("Tester");
     expect(result.current.currentUserId).toBeNull();
     expect(result.current.isMyProfile).toBe(false);
 
     await act(async () => {
       myProfileDeferred.resolve({
         ok: true,
-        data: { id: "user-1", nickname: "테스터", nicknameChangedAt: null },
+        data: {
+          id: "user-1",
+          nickname: "Tester",
+          nicknameChangedAt: null,
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: true,
+          canLinkGoogle: false,
+        },
       });
     });
   });
 
-  it("내 프로필 응답이 오면 currentUserId/isMyProfile를 후행 업데이트한다", async () => {
+  it("updates viewer state after my profile resolves", async () => {
     const myProfileDeferred = createDeferred<{
       ok: true;
-      data: { id: string; nickname: string; nicknameChangedAt: string | null };
+      data: {
+        id: string;
+        nickname: string;
+        nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
+      };
     }>();
 
     vi.mocked(fetchProfileClient).mockResolvedValue({
       ok: true,
-      data: { id: "user-1", nickname: "테스터" },
+      data: { id: "user-1", nickname: "Tester" },
     });
     vi.mocked(fetchMyProfileClient).mockReturnValue(myProfileDeferred.promise);
 
@@ -80,15 +104,18 @@ describe("useProfileContext", () => {
     await waitFor(() => {
       expect(result.current.profileLoadState).toBe("ready");
     });
-    expect(fetchMyProfileClient).toHaveBeenCalledWith({ force: true });
 
     await act(async () => {
       myProfileDeferred.resolve({
         ok: true,
         data: {
           id: "user-1",
-          nickname: "테스터",
+          nickname: "Tester",
           nicknameChangedAt: "2026-04-01T00:00:00.000Z",
+          profileCreated: true,
+          isAnonymous: true,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       });
     });
@@ -97,6 +124,9 @@ describe("useProfileContext", () => {
       expect(result.current.currentUserId).toBe("user-1");
       expect(result.current.isMyProfile).toBe(true);
       expect(result.current.nicknameChangedAt).toBe("2026-04-01T00:00:00.000Z");
+      expect(result.current.viewerIsAnonymous).toBe(true);
+      expect(result.current.viewerGoogleLinked).toBe(false);
+      expect(result.current.viewerCanLinkGoogle).toBe(true);
     });
   });
 });

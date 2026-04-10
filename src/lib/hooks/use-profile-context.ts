@@ -7,7 +7,7 @@ import {
 } from "@/lib/api/profile-client";
 import { useMountedRef } from "./use-mounted-ref";
 
-export type ProfileContextLoadState = "loading" | "ready" | "error";
+type ProfileContextLoadState = "loading" | "ready" | "error";
 
 export function useProfileContext(userId: string) {
   const [profileLoadState, setProfileLoadState] =
@@ -57,16 +57,16 @@ export function useProfileContext(userId: string) {
     }
 
     async function loadViewerContext() {
-      const myProfileResult = await fetchMyProfileClient({ force: true });
+      const myProfileResult = await fetchMyProfileClient();
       if (!mountedRef.current || requestTokenRef.current !== requestToken) return;
 
       if (myProfileResult.ok) {
         setCurrentUserId(myProfileResult.data.id);
         setNicknameChangedAt(myProfileResult.data.nicknameChangedAt);
         setIsMyProfile(myProfileResult.data.id === userId);
-        setViewerIsAnonymous(myProfileResult.data.isAnonymous ?? false);
-        setViewerGoogleLinked(myProfileResult.data.googleLinked ?? false);
-        setViewerCanLinkGoogle(myProfileResult.data.canLinkGoogle ?? false);
+        setViewerIsAnonymous(myProfileResult.data.isAnonymous);
+        setViewerGoogleLinked(myProfileResult.data.googleLinked);
+        setViewerCanLinkGoogle(myProfileResult.data.canLinkGoogle);
       }
     }
 

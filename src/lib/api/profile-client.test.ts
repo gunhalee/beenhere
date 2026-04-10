@@ -50,6 +50,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick One",
         nicknameChangedAt: null,
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
 
@@ -68,6 +72,10 @@ describe("profile-client my-profile cache", () => {
         id: string;
         nickname: string;
         nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
       };
     }>();
     vi.mocked(fetchApi).mockReturnValue(deferred.promise);
@@ -83,6 +91,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick One",
         nicknameChangedAt: null,
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
 
@@ -98,6 +110,10 @@ describe("profile-client my-profile cache", () => {
         id: string;
         nickname: string;
         nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
       };
     }>();
     const latestDeferred = createDeferred<{
@@ -106,6 +122,10 @@ describe("profile-client my-profile cache", () => {
         id: string;
         nickname: string;
         nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
       };
     }>();
 
@@ -122,6 +142,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick Latest",
         nicknameChangedAt: "2026-04-09T01:00:00.000Z",
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
     await latestPromise;
@@ -132,6 +156,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick Stale",
         nicknameChangedAt: null,
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
     await stalePromise;
@@ -154,6 +182,10 @@ describe("profile-client my-profile cache", () => {
           id: "user-1",
           nickname: "Nick One",
           nicknameChangedAt: null,
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       })
       .mockResolvedValueOnce({
@@ -162,6 +194,10 @@ describe("profile-client my-profile cache", () => {
           id: "user-1",
           nickname: "Nick Two",
           nicknameChangedAt: "2026-04-09T00:00:00.000Z",
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       });
 
@@ -179,6 +215,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick One",
         nicknameChangedAt: null,
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
 
@@ -207,6 +247,10 @@ describe("profile-client my-profile cache", () => {
           id: "user-1",
           nickname: "Nick One",
           nicknameChangedAt: null,
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       })
       .mockResolvedValueOnce({
@@ -220,6 +264,10 @@ describe("profile-client my-profile cache", () => {
           id: "user-2",
           nickname: "Nick Two",
           nicknameChangedAt: null,
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       });
 
@@ -241,6 +289,10 @@ describe("profile-client my-profile cache", () => {
         id: string;
         nickname: string;
         nicknameChangedAt: string | null;
+        profileCreated: boolean;
+        isAnonymous: boolean;
+        googleLinked: boolean;
+        canLinkGoogle: boolean;
       };
     }>();
 
@@ -252,6 +304,10 @@ describe("profile-client my-profile cache", () => {
           id: "user-2",
           nickname: "Nick Fresh",
           nicknameChangedAt: null,
+          profileCreated: true,
+          isAnonymous: false,
+          googleLinked: false,
+          canLinkGoogle: true,
         },
       });
 
@@ -264,6 +320,10 @@ describe("profile-client my-profile cache", () => {
         id: "user-1",
         nickname: "Nick Stale",
         nicknameChangedAt: null,
+        profileCreated: true,
+        isAnonymous: false,
+        googleLinked: false,
+        canLinkGoogle: true,
       },
     });
     await stalePromise;
@@ -476,5 +536,49 @@ describe("profile-client profile list coordinate forwarding", () => {
       "/api/profiles/user-1/likes?limit=10&cursor=cursor-l1&latitude=37.55&longitude=127.02",
       expect.any(Object),
     );
+  });
+
+  it("caches repeated profile posts requests with the same query", async () => {
+    vi.mocked(fetchApi).mockResolvedValue({
+      ok: true,
+      data: {
+        items: [],
+        nextCursor: null,
+      },
+    });
+
+    const first = await fetchProfilePostsClient("user-1", undefined, 20);
+    const second = await fetchProfilePostsClient("user-1", undefined, 20);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("dedupes in-flight profile likes requests with the same query", async () => {
+    const deferred = createDeferred<{
+      ok: true;
+      data: {
+        items: [];
+        nextCursor: null;
+      };
+    }>();
+    vi.mocked(fetchApi).mockReturnValue(deferred.promise);
+
+    const firstPromise = fetchProfileLikesClient("user-1", "cursor-l1", 10);
+    const secondPromise = fetchProfileLikesClient("user-1", "cursor-l1", 10);
+
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+
+    deferred.resolve({
+      ok: true,
+      data: {
+        items: [],
+        nextCursor: null,
+      },
+    });
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+    expect(first).toEqual(second);
   });
 });

@@ -123,7 +123,7 @@ export async function hidePostByReportRepository(reportId: string) {
     .eq("id", postId);
 
   if (updateError) throw updateError;
-  await refreshFeedStateBestEffort("moderation_hide_post");
+  void refreshFeedStateBestEffort("moderation_hide_post");
 
   return { reportId, postId, hidden: true, alreadyHidden: false };
 }

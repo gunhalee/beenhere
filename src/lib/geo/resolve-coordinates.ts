@@ -13,13 +13,13 @@ type CoordinatesRef = {
 
 type ResolveCoordinatesSource = "ref" | "cache" | "browser";
 
-export type ResolveCoordinatesSuccess = {
+type ResolveCoordinatesSuccess = {
   ok: true;
   coords: Coordinates;
   source: ResolveCoordinatesSource;
 };
 
-export type ResolveCoordinatesFailure = {
+type ResolveCoordinatesFailure = {
   ok: false;
   error: unknown;
   message: string;

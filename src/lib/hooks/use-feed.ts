@@ -22,7 +22,7 @@ import {
   type RemovedItemSnapshot,
 } from "./optimistic-removal";
 
-export type FeedStatus = "idle" | "locating" | "loading" | "success" | "error";
+type FeedStatus = "idle" | "locating" | "loading" | "success" | "error";
 
 export type FeedHookState = {
   status: FeedStatus;

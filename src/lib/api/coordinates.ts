@@ -1,6 +1,6 @@
 import { API_ERROR_CODE } from "./common-errors";
 
-export type CoordinateValidationResult =
+type CoordinateValidationResult =
   | {
       ok: true;
       data: {
@@ -14,7 +14,7 @@ export type CoordinateValidationResult =
       code: typeof API_ERROR_CODE.INVALID_LOCATION;
     };
 
-export type OptionalCoordinateValidationResult =
+type OptionalCoordinateValidationResult =
   | {
       ok: true;
       data: {

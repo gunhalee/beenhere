@@ -37,12 +37,12 @@ function mockSupabasePost(options?: {
   userId?: string | null;
   userError?: unknown;
   existing?: { id: string } | null;
-  insertError?: { code?: string } | null;
+  insertError?: { code?: string; message?: string; details?: string; hint?: string } | null;
 }) {
   const queryBuilder = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: options?.existing ?? null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: options?.existing ?? null, error: null }),
     insert: vi.fn().mockResolvedValue({ error: options?.insertError ?? null }),
   };
 
@@ -104,30 +104,6 @@ describe("GET /api/profiles/me", () => {
       canLinkGoogle: true,
     });
   });
-
-  it("returns fallback viewer context when profile row is missing", async () => {
-    vi.mocked(getMyProfileRepository).mockResolvedValue({
-      id: "user-1",
-      nickname: "Guest",
-      nicknameChangedAt: null,
-      createdAt: "2026-04-09T00:00:00.000Z",
-      profileCreated: false,
-      isAnonymous: true,
-      googleLinked: false,
-      canLinkGoogle: true,
-    });
-
-    const response = await GET();
-    const json = (await response.json()) as {
-      ok: boolean;
-      data?: { profileCreated?: boolean; id?: string };
-    };
-
-    expect(response.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.data?.id).toBe("user-1");
-    expect(json.data?.profileCreated).toBe(false);
-  });
 });
 
 describe("POST /api/profiles/me", () => {
@@ -165,8 +141,13 @@ describe("POST /api/profiles/me", () => {
     expect(json.code).toBe("UNAUTHORIZED");
   });
 
-  it("returns PROFILE_ALREADY_EXISTS when profile already exists", async () => {
-    mockSupabasePost({ existing: { id: "user-1" } });
+  it("returns PROFILE_ALREADY_EXISTS when insert conflicts on profile id", async () => {
+    mockSupabasePost({
+      insertError: {
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "profiles_pkey"',
+      },
+    });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
     const json = (await response.json()) as { ok: boolean; code?: string };
@@ -176,8 +157,13 @@ describe("POST /api/profiles/me", () => {
     expect(json.code).toBe("PROFILE_ALREADY_EXISTS");
   });
 
-  it("returns NICKNAME_TAKEN for unique constraint conflict", async () => {
-    mockSupabasePost({ insertError: { code: "23505" } });
+  it("returns NICKNAME_TAKEN for nickname unique constraint conflict", async () => {
+    mockSupabasePost({
+      insertError: {
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "profiles_nickname_key"',
+      },
+    });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
     const json = (await response.json()) as { ok: boolean; code?: string };
@@ -185,6 +171,21 @@ describe("POST /api/profiles/me", () => {
     expect(response.status).toBe(409);
     expect(json.ok).toBe(false);
     expect(json.code).toBe("NICKNAME_TAKEN");
+  });
+
+  it("falls back to PROFILE_ALREADY_EXISTS when unique violation is ambiguous", async () => {
+    const { queryBuilder } = mockSupabasePost({
+      existing: { id: "user-1" },
+      insertError: { code: "23505" },
+    });
+
+    const response = await POST(makeJsonRequest({ nickname: "tester" }));
+    const json = (await response.json()) as { ok: boolean; code?: string };
+
+    expect(response.status).toBe(409);
+    expect(json.ok).toBe(false);
+    expect(json.code).toBe("PROFILE_ALREADY_EXISTS");
+    expect(queryBuilder.maybeSingle).toHaveBeenCalledTimes(1);
   });
 
   it("creates profile and returns display nickname on success", async () => {

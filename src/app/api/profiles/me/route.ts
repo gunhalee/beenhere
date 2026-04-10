@@ -9,6 +9,32 @@ import {
   regenerateNicknameRepository,
 } from "@/lib/profiles/repository";
 
+type ProfileInsertErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+  constraint?: string;
+};
+
+function getErrorText(error: ProfileInsertErrorLike) {
+  return `${error.constraint ?? ""} ${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+}
+
+function isUniqueConstraintError(error: ProfileInsertErrorLike) {
+  return error.code === "23505";
+}
+
+function isProfileIdConflict(error: ProfileInsertErrorLike) {
+  const text = getErrorText(error);
+  return text.includes("profiles_pkey");
+}
+
+function isNicknameConflict(error: ProfileInsertErrorLike) {
+  const text = getErrorText(error);
+  return text.includes("profiles_nickname_key");
+}
+
 export async function GET() {
   if (!hasSupabaseBrowserConfig()) {
     return ok({
@@ -31,10 +57,10 @@ export async function GET() {
     id: profile.id,
     nickname: profile.nickname,
     nicknameChangedAt: profile.nicknameChangedAt,
-    profileCreated: profile.profileCreated ?? true,
-    isAnonymous: profile.isAnonymous ?? false,
-    googleLinked: profile.googleLinked ?? false,
-    canLinkGoogle: profile.canLinkGoogle ?? false,
+    profileCreated: profile.profileCreated,
+    isAnonymous: profile.isAnonymous,
+    googleLinked: profile.googleLinked,
+    canLinkGoogle: profile.canLinkGoogle,
   });
 }
 
@@ -49,14 +75,6 @@ export async function PATCH() {
   const profile = await getMyProfileRepository();
   if (!profile) {
     return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
-  }
-
-  if (profile.profileCreated === false) {
-    return fail(
-      "프로필은 첫 쓰기 동작 시 자동으로 생성돼요.",
-      400,
-      API_ERROR_CODE.VALIDATION_ERROR,
-    );
   }
 
   const result = await regenerateNicknameRepository(
@@ -116,26 +134,38 @@ export async function POST(request: Request) {
     return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
   }
 
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .single();
-
-  if (existing) {
-    return fail(
-      API_ERROR_MESSAGE.PROFILE_ALREADY_EXISTS,
-      409,
-      API_ERROR_CODE.PROFILE_ALREADY_EXISTS,
-    );
-  }
-
   const { error: insertError } = await supabase
     .from("profiles")
     .insert({ id: user.id, nickname });
 
   if (insertError) {
-    if (insertError.code === "23505") {
+    if (isUniqueConstraintError(insertError)) {
+      if (isProfileIdConflict(insertError)) {
+        return fail(
+          API_ERROR_MESSAGE.PROFILE_ALREADY_EXISTS,
+          409,
+          API_ERROR_CODE.PROFILE_ALREADY_EXISTS,
+        );
+      }
+
+      if (isNicknameConflict(insertError)) {
+        return fail(API_ERROR_MESSAGE.NICKNAME_TAKEN, 409, API_ERROR_CODE.NICKNAME_TAKEN);
+      }
+
+      const { data: existingProfile, error: existingProfileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!existingProfileError && existingProfile) {
+        return fail(
+          API_ERROR_MESSAGE.PROFILE_ALREADY_EXISTS,
+          409,
+          API_ERROR_CODE.PROFILE_ALREADY_EXISTS,
+        );
+      }
+
       return fail(API_ERROR_MESSAGE.NICKNAME_TAKEN, 409, API_ERROR_CODE.NICKNAME_TAKEN);
     }
     return fail(

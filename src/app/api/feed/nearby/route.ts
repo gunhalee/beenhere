@@ -2,7 +2,7 @@ import { fail, ok } from "@/lib/api/response";
 import { parseCoordinatesFromSearchParams } from "@/lib/api/coordinates";
 import { isApiRouteTimeoutError, runWithTimeout } from "@/lib/api/request";
 import { API_ERROR_CODE, API_TIMEOUT_CODE } from "@/lib/api/common-errors";
-import { readFeedStateRepository } from "@/lib/posts/repository/feed-state";
+import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 import { decodeFeedCursor } from "@/lib/posts/repository/cursor";
 import { loadNearbyFeedRepository } from "@/lib/posts/repository/feed";
 
@@ -41,16 +41,18 @@ export async function GET(request: Request) {
     );
 
     let stateVersion: string | null = null;
-    try {
-      const state = await runWithTimeout(
-        () => readFeedStateRepository(),
-        FEED_STATE_INLINE_TIMEOUT_MS,
-        API_TIMEOUT_CODE.TIMEOUT_STATE,
-        "피드 상태 조회 시간이 초과됐어요.",
-      );
-      stateVersion = state.stateVersion;
-    } catch (stateError) {
-      console.warn("[api/feed/nearby] feed state read skipped:", stateError);
+    if (!cursor) {
+      try {
+        const state = await runWithTimeout(
+          () => readFeedStateCachedRepository(),
+          FEED_STATE_INLINE_TIMEOUT_MS,
+          API_TIMEOUT_CODE.TIMEOUT_STATE,
+          "피드 상태 조회 시간이 초과됐어요.",
+        );
+        stateVersion = state.stateVersion;
+      } catch (stateError) {
+        console.warn("[api/feed/nearby] feed state read skipped:", stateError);
+      }
     }
 
     return ok({ items: result.items, nextCursor: result.nextCursor, stateVersion });

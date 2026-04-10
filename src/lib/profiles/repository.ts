@@ -2,8 +2,8 @@ import type { ProfilePostRow, ProfileLikeRow, PostLikerRow } from "@/types/db";
 import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
-import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { encodeCursor, decodeCursor } from "@/lib/utils/cursor";
 import {
@@ -57,12 +57,14 @@ function hasLinkedProvider(
   return identityLinked || appMetadataProvider === normalizedProvider || metadataLinked;
 }
 
-function isActivityRpcCompatibilityMissing(error: { code?: string; message?: string } | null) {
-  if (!error) return false;
-  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
-    return true;
-  }
-  return /touch_profile_activity/i.test(error.message ?? "");
+function touchProfileActivityInBackground(input: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+  isAnonymous: boolean;
+}) {
+  void touchProfileActivity(input).catch((error) => {
+    console.warn("[profiles/repository] profile activity touch skipped:", error);
+  });
 }
 
 // ---------------------------
@@ -102,13 +104,11 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
   const isAnonymous = Boolean(user.is_anonymous);
   const canLinkGoogle = !googleLinked;
 
-  const { error: activityError } = await supabase.rpc("touch_profile_activity", {
-    p_user_id: user.id,
-    p_is_anonymous: isAnonymous,
+  touchProfileActivityInBackground({
+    supabase,
+    userId: user.id,
+    isAnonymous,
   });
-  if (activityError && !isActivityRpcCompatibilityMissing(activityError)) {
-    throw activityError;
-  }
 
   const { data, error } = await supabase
     .from("profiles")
@@ -116,24 +116,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
     .eq("id", user.id)
     .single();
 
-  if (error || !data) {
-    const ensuredProfile = await ensureProfileExistsForUser(
-      supabase,
-      user.id,
-      isAnonymous,
-    );
-
-    return {
-      id: user.id,
-      nickname: ensuredProfile.nickname,
-      nicknameChangedAt: null,
-      createdAt: user.created_at ?? new Date().toISOString(),
-      profileCreated: true,
-      isAnonymous,
-      googleLinked,
-      canLinkGoogle,
-    };
-  }
+  if (error || !data) return null;
 
   return {
     id: data.id as string,

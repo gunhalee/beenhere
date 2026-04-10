@@ -1,8 +1,7 @@
-﻿import { fail, ok } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getProfileRepository } from "@/lib/profiles/repository";
 
 type Context = { params: Promise<{ userId: string }> };
@@ -17,23 +16,11 @@ export async function GET(_request: Request, context: Context) {
   try {
     const profile = await getProfileRepository(userId);
 
-    if (profile) {
-      return ok({ id: profile.id, nickname: profile.nickname });
+    if (!profile) {
+      return fail("존재하지 않는 사용자예요.", 404, API_ERROR_CODE.NOT_FOUND);
     }
 
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user?.id === userId) {
-      return ok({
-        id: userId,
-        nickname: formatNicknameForDisplay("게스트"),
-      });
-    }
-
-    return fail("존재하지 않는 사용자예요.", 404, API_ERROR_CODE.NOT_FOUND);
+    return ok({ id: profile.id, nickname: profile.nickname });
   } catch (error) {
     console.error("[api/profiles/:userId] 조회 실패:", error);
     return fail(
@@ -43,4 +30,3 @@ export async function GET(_request: Request, context: Context) {
     );
   }
 }
-

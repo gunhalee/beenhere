@@ -20,29 +20,6 @@ type StartGoogleOAuthResponse = {
   url: string;
 };
 
-type OAuthLikeError = {
-  code?: string | null;
-  message?: string | null;
-} | null;
-
-function shouldFallbackToLogin(error: OAuthLikeError) {
-  if (!error) return false;
-
-  const code = (error.code ?? "").toLowerCase();
-  if (code === "manual_linking_disabled" || code === "identity_already_exists") {
-    return true;
-  }
-
-  const message = (error.message ?? "").toLowerCase();
-  if (!message) return false;
-
-  return (
-    /manual linking is disabled/i.test(message) ||
-    /identity.*already.*(exists|linked)/i.test(message) ||
-    /already linked to another user/i.test(message)
-  );
-}
-
 async function startGoogleLoginOAuth(input: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   redirectTo: string;
@@ -112,24 +89,9 @@ export async function POST(request: Request) {
         },
       });
 
-      if (shouldFallbackToLogin(error)) {
-        const fallbackRedirectTo = buildGoogleCallbackUrl({
-          origin,
-          intent: "login",
-          nextPath: sanitizedNextPath,
-          guestUserId: sanitizedGuestUserId ?? sanitizeGuestUserId(user.id),
-        });
-
-        return startGoogleLoginOAuth({
-          supabase,
-          redirectTo: fallbackRedirectTo,
-          errorMessage: "Google 계정 연동을 시작하지 못했어요.",
-        });
-      }
-
       if (error || !data?.url) {
         return fail(
-          error?.message ?? "Google 계정 연동을 시작하지 못했어요.",
+          error?.message ?? "Google 계정 연결을 시작하지 못했어요.",
           400,
           API_ERROR_CODE.INVALID_REQUEST,
         );

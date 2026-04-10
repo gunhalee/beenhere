@@ -4,7 +4,7 @@ export type Coordinates = {
   longitude: number;
 };
 
-export type GeoErrorCode =
+type GeoErrorCode =
   | "GEOLOCATION_UNAVAILABLE"
   | "GEOLOCATION_PERMISSION_DENIED"
   | "GEOLOCATION_POSITION_UNAVAILABLE"

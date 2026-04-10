@@ -27,14 +27,6 @@ const DEFAULT_RETRY_OPTIONS: Required<EnsureGuestSessionWithRetryOptions> = {
 
 let inFlightBootstrap: Promise<EnsureGuestSessionResult> | null = null;
 
-function isActivityRpcCompatibilityMissing(error: { code?: string; message?: string } | null) {
-  if (!error) return false;
-  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
-    return true;
-  }
-  return /touch_profile_activity/i.test(error.message ?? "");
-}
-
 async function touchGuestLastActive(
   supabase: ReturnType<typeof getSupabaseBrowserClient>,
   input: { userId: string; isAnonymous: boolean },
@@ -47,7 +39,7 @@ async function touchGuestLastActive(
     p_is_anonymous: true,
   });
 
-  if (!error || isActivityRpcCompatibilityMissing(error)) {
+  if (!error) {
     return;
   }
 

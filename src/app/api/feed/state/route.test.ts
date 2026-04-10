@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
-import { readFeedStateRepository } from "@/lib/posts/repository/feed-state";
+import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 import { ApiRouteTimeoutError } from "@/lib/api/request";
 
 vi.mock("@/lib/posts/repository/feed-state", () => ({
-  readFeedStateRepository: vi.fn(),
+  readFeedStateCachedRepository: vi.fn(),
 }));
 
 describe("GET /api/feed/state", () => {
@@ -13,7 +13,7 @@ describe("GET /api/feed/state", () => {
   });
 
   it("returns stateVersion + refreshedAt on success", async () => {
-    vi.mocked(readFeedStateRepository).mockResolvedValue({
+    vi.mocked(readFeedStateCachedRepository).mockResolvedValue({
       stateVersion: "v-1",
       refreshedAt: "2026-01-01T00:00:00.000Z",
       sourceLastActivityAt: "2026-01-01T00:00:00.000Z",
@@ -34,7 +34,7 @@ describe("GET /api/feed/state", () => {
   });
 
   it("returns 504 timeout code when state read times out", async () => {
-    vi.mocked(readFeedStateRepository).mockRejectedValue(
+    vi.mocked(readFeedStateCachedRepository).mockRejectedValue(
       new ApiRouteTimeoutError("timeout", "TIMEOUT_STATE"),
     );
 
@@ -47,7 +47,7 @@ describe("GET /api/feed/state", () => {
   });
 
   it("returns 500 INTERNAL_ERROR on unknown failure", async () => {
-    vi.mocked(readFeedStateRepository).mockRejectedValue(new Error("db down"));
+    vi.mocked(readFeedStateCachedRepository).mockRejectedValue(new Error("db down"));
 
     const response = await GET();
     const json = (await response.json()) as { ok: boolean; code?: string };

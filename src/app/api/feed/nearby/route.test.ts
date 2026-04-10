@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 import { loadNearbyFeedRepository } from "@/lib/posts/repository/feed";
-import { readFeedStateRepository } from "@/lib/posts/repository/feed-state";
+import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 import { decodeFeedCursor } from "@/lib/posts/repository/cursor";
 
 vi.mock("@/lib/posts/repository/feed", () => ({
@@ -9,7 +9,7 @@ vi.mock("@/lib/posts/repository/feed", () => ({
 }));
 
 vi.mock("@/lib/posts/repository/feed-state", () => ({
-  readFeedStateRepository: vi.fn(),
+  readFeedStateCachedRepository: vi.fn(),
 }));
 
 vi.mock("@/lib/posts/repository/cursor", () => ({
@@ -32,7 +32,7 @@ describe("GET /api/feed/nearby", () => {
       items: [],
       nextCursor: null,
     });
-    vi.mocked(readFeedStateRepository).mockResolvedValue({
+    vi.mocked(readFeedStateCachedRepository).mockResolvedValue({
       stateVersion: "v1",
       refreshedAt: "2026-01-01T00:00:00.000Z",
       sourceLastActivityAt: "2026-01-01T00:00:00.000Z",
@@ -91,8 +91,23 @@ describe("GET /api/feed/nearby", () => {
     expect(json.data?.stateVersion).toBe("v1");
   });
 
+  it("skips inline feed-state read on paginated cursor requests", async () => {
+    const response = await GET(
+      makeRequest("latitude=37.5&longitude=127.0&cursor=cursor-1"),
+    );
+    const json = (await response.json()) as {
+      ok: boolean;
+      data?: { stateVersion: string | null };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.data?.stateVersion).toBeNull();
+    expect(readFeedStateCachedRepository).not.toHaveBeenCalled();
+  });
+
   it("still returns success when inline feed-state read fails", async () => {
-    vi.mocked(readFeedStateRepository).mockRejectedValue(new Error("state failed"));
+    vi.mocked(readFeedStateCachedRepository).mockRejectedValue(new Error("state failed"));
 
     const response = await GET(makeRequest("latitude=37.5&longitude=127.0"));
     const json = (await response.json()) as {
@@ -116,4 +131,3 @@ describe("GET /api/feed/nearby", () => {
     expect(json.code).toBe("INTERNAL_ERROR");
   });
 });
-

@@ -41,7 +41,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   }
 
   const result = await createPostRepository(input);
-  await refreshFeedStateBestEffort("create_post");
+  void refreshFeedStateBestEffort("create_post");
   return { ok: true, postId: result.post_id };
 }
 
@@ -76,7 +76,7 @@ export async function likePost(input: LikePostInput): Promise<LikePostResult & {
 
   try {
     const result = await likePostRepository(input);
-    await refreshFeedStateBestEffort("like_post");
+    void refreshFeedStateBestEffort("like_post");
     return { ok: true, likeCount: Number(result.like_count) };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
@@ -101,7 +101,7 @@ export async function deletePost(postId: string): Promise<DeletePostResult> {
 
   try {
     await deletePostRepository(postId);
-    await refreshFeedStateBestEffort("delete_post");
+    void refreshFeedStateBestEffort("delete_post");
     return { ok: true };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";

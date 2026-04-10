@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMountedRef } from "./use-mounted-ref";
 
-export type PaginatedListData<TItem> = {
+type PaginatedListData<TItem> = {
   items: TItem[];
   nextCursor: string | null;
 };

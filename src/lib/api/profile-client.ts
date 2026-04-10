@@ -12,6 +12,7 @@ const PROFILE_READ_TIMEOUT_MS = 3000;
 const PROFILE_WRITE_TIMEOUT_MS = 5000;
 const MY_PROFILE_CACHE_TTL_MS = 30_000;
 const PROFILE_CACHE_TTL_MS = 30_000;
+const PROFILE_LIST_CACHE_TTL_MS = 10_000;
 
 type PublicProfileData = {
   id: string;
@@ -22,10 +23,10 @@ type MyProfileData = {
   id: string;
   nickname: string;
   nicknameChangedAt: string | null;
-  profileCreated?: boolean;
-  isAnonymous?: boolean;
-  googleLinked?: boolean;
-  canLinkGoogle?: boolean;
+  profileCreated: boolean;
+  isAnonymous: boolean;
+  googleLinked: boolean;
+  canLinkGoogle: boolean;
 };
 
 type CachedMyProfile = {
@@ -38,10 +39,30 @@ type CachedPublicProfile = {
   expiresAt: number;
 };
 
+type ProfileListData<TItem> = {
+  items: TItem[];
+  nextCursor: string | null;
+};
+
+type CachedProfileList<TItem> = {
+  data: ProfileListData<TItem>;
+  expiresAt: number;
+};
+
 let cachedMyProfile: CachedMyProfile | null = null;
 let inFlightMyProfileRequest: Promise<ApiResult<MyProfileData>> | null = null;
 const cachedProfiles = new Map<string, CachedPublicProfile>();
 const inFlightProfileRequests = new Map<string, Promise<ApiResult<PublicProfileData>>>();
+const cachedProfilePosts = new Map<string, CachedProfileList<ProfilePostItem>>();
+const inFlightProfilePostRequests = new Map<
+  string,
+  Promise<ApiResult<ProfileListData<ProfilePostItem>>>
+>();
+const cachedProfileLikes = new Map<string, CachedProfileList<ProfileLikeItem>>();
+const inFlightProfileLikeRequests = new Map<
+  string,
+  Promise<ApiResult<ProfileListData<ProfileLikeItem>>>
+>();
 
 function hasFreshMyProfileCache() {
   if (!cachedMyProfile) return false;
@@ -72,6 +93,32 @@ function setProfileCache(userId: string, data: PublicProfileData) {
   });
 }
 
+function getFreshProfileListCache<TItem>(
+  cache: Map<string, CachedProfileList<TItem>>,
+  key: string,
+) {
+  const cached = cache.get(key);
+  if (!cached) return null;
+
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+
+  return cached.data;
+}
+
+function setProfileListCache<TItem>(
+  cache: Map<string, CachedProfileList<TItem>>,
+  key: string,
+  data: ProfileListData<TItem>,
+) {
+  cache.set(key, {
+    data,
+    expiresAt: Date.now() + PROFILE_LIST_CACHE_TTL_MS,
+  });
+}
+
 function appendCachedCoordinates(searchParams: URLSearchParams) {
   const cachedCoords = getCachedBrowserCoordinates();
   if (!cachedCoords) return;
@@ -89,11 +136,35 @@ export function clearProfileCache(userId?: string) {
   if (userId) {
     cachedProfiles.delete(userId);
     inFlightProfileRequests.delete(userId);
+    for (const key of cachedProfilePosts.keys()) {
+      if (key.startsWith(`/api/profiles/${userId}/posts?`)) {
+        cachedProfilePosts.delete(key);
+      }
+    }
+    for (const key of inFlightProfilePostRequests.keys()) {
+      if (key.startsWith(`/api/profiles/${userId}/posts?`)) {
+        inFlightProfilePostRequests.delete(key);
+      }
+    }
+    for (const key of cachedProfileLikes.keys()) {
+      if (key.startsWith(`/api/profiles/${userId}/likes?`)) {
+        cachedProfileLikes.delete(key);
+      }
+    }
+    for (const key of inFlightProfileLikeRequests.keys()) {
+      if (key.startsWith(`/api/profiles/${userId}/likes?`)) {
+        inFlightProfileLikeRequests.delete(key);
+      }
+    }
     return;
   }
 
   cachedProfiles.clear();
   inFlightProfileRequests.clear();
+  cachedProfilePosts.clear();
+  inFlightProfilePostRequests.clear();
+  cachedProfileLikes.clear();
+  inFlightProfileLikeRequests.clear();
 }
 
 export function updateMyProfileCacheNickname(input: {
@@ -210,19 +281,35 @@ export async function fetchProfilePostsClient(
   if (cursor) sp.set("cursor", cursor);
   appendCachedCoordinates(sp);
 
-  return fetchApi<{ items: ProfilePostItem[]; nextCursor: string | null }>(
-    `/api/profiles/${userId}/posts?${sp.toString()}`,
-    {
-      timeoutMs: PROFILE_READ_TIMEOUT_MS,
-      timeoutErrorMessage: "작성 글 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
-      timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_POSTS,
-    },
-  );
-}
+  const path = `/api/profiles/${userId}/posts?${sp.toString()}`;
+  const cached = getFreshProfileListCache(cachedProfilePosts, path);
+  if (cached) {
+    return { ok: true, data: cached } as const;
+  }
 
-// ---------------------------
-// 라이크한 글 목록
-// ---------------------------
+  const inFlight = inFlightProfilePostRequests.get(path);
+  if (inFlight) return inFlight;
+
+  const request = fetchApi<ProfileListData<ProfilePostItem>>(path, {
+    timeoutMs: PROFILE_READ_TIMEOUT_MS,
+    timeoutErrorMessage: "작성 글 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+    timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_POSTS,
+  })
+    .then((result) => {
+      if (result.ok && inFlightProfilePostRequests.get(path) === request) {
+        setProfileListCache(cachedProfilePosts, path, result.data);
+      }
+      return result;
+    })
+    .finally(() => {
+      if (inFlightProfilePostRequests.get(path) === request) {
+        inFlightProfilePostRequests.delete(path);
+      }
+    });
+
+  inFlightProfilePostRequests.set(path, request);
+  return request;
+}
 
 export async function fetchProfileLikesClient(
   userId: string,
@@ -233,19 +320,35 @@ export async function fetchProfileLikesClient(
   if (cursor) sp.set("cursor", cursor);
   appendCachedCoordinates(sp);
 
-  return fetchApi<{ items: ProfileLikeItem[]; nextCursor: string | null }>(
-    `/api/profiles/${userId}/likes?${sp.toString()}`,
-    {
-      timeoutMs: PROFILE_READ_TIMEOUT_MS,
-      timeoutErrorMessage: "라이크 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
-      timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_LIKES,
-    },
-  );
-}
+  const path = `/api/profiles/${userId}/likes?${sp.toString()}`;
+  const cached = getFreshProfileListCache(cachedProfileLikes, path);
+  if (cached) {
+    return { ok: true, data: cached } as const;
+  }
 
-// ---------------------------
-// 내 글 라이커 목록 (작성자 전용)
-// ---------------------------
+  const inFlight = inFlightProfileLikeRequests.get(path);
+  if (inFlight) return inFlight;
+
+  const request = fetchApi<ProfileListData<ProfileLikeItem>>(path, {
+    timeoutMs: PROFILE_READ_TIMEOUT_MS,
+    timeoutErrorMessage: "라이크 목록 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+    timeoutCode: API_TIMEOUT_CODE.TIMEOUT_PROFILE_LIKES,
+  })
+    .then((result) => {
+      if (result.ok && inFlightProfileLikeRequests.get(path) === request) {
+        setProfileListCache(cachedProfileLikes, path, result.data);
+      }
+      return result;
+    })
+    .finally(() => {
+      if (inFlightProfileLikeRequests.get(path) === request) {
+        inFlightProfileLikeRequests.delete(path);
+      }
+    });
+
+  inFlightProfileLikeRequests.set(path, request);
+  return request;
+}
 
 export async function fetchPostLikersClient(
   postId: string,

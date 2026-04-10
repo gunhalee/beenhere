@@ -1,14 +1,14 @@
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_TIMEOUT_CODE } from "@/lib/api/common-errors";
 import { isApiRouteTimeoutError, runWithTimeout } from "@/lib/api/request";
-import { readFeedStateRepository } from "@/lib/posts/repository/feed-state";
+import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 
 const FEED_STATE_ROUTE_TIMEOUT_MS = 1200;
 
 export async function GET() {
   try {
     const state = await runWithTimeout(
-      () => readFeedStateRepository(),
+      () => readFeedStateCachedRepository(),
       FEED_STATE_ROUTE_TIMEOUT_MS,
       API_TIMEOUT_CODE.TIMEOUT_STATE,
       "피드 상태 조회 시간이 초과됐어요.",

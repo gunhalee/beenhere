@@ -137,6 +137,7 @@ describe("POST /api/posts", () => {
           },
         }),
       },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
     } as never);
     vi.mocked(consumeAnonymousWriteQuota).mockResolvedValue({
       allowed: false,
@@ -168,6 +169,40 @@ describe("POST /api/posts", () => {
     expect(json.details?.limit).toBe(10);
     expect(json.details?.windowSeconds).toBe(60);
     expect(json.details?.consentRequired).toBe(true);
+    expect(createPost).not.toHaveBeenCalled();
+  });
+
+  it("returns structured internal error when auth preflight throws", async () => {
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "guest-1",
+              is_anonymous: true,
+              user_metadata: {},
+            },
+          },
+        }),
+      },
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    } as never);
+    vi.mocked(ensureProfileExistsForUser).mockRejectedValue(new Error("preflight failed"));
+
+    const response = await POST(
+      makeJsonRequest({
+        content: "hello",
+        latitude: 37.5,
+        longitude: 127.0,
+        placeLabel: "Gangnam-gu",
+      }),
+    );
+    const json = (await response.json()) as { ok: boolean; code?: string };
+
+    expect(response.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.code).toBe("INTERNAL_ERROR");
     expect(createPost).not.toHaveBeenCalled();
   });
 });
