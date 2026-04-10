@@ -65,7 +65,6 @@ const LIKE_RPC_ERROR_MAP: Record<string, { code: string; message: string; status
   P0001: { code: API_ERROR_CODE.UNAUTHORIZED,    message: API_ERROR_MESSAGE.AUTH_REQUIRED, status: 401 },
   P0002: { code: API_ERROR_CODE.ALREADY_LIKED,   message: "이미 라이크한 글이에요.", status: 409 },
   P0003: { code: API_ERROR_CODE.POST_NOT_FOUND,  message: "글을 찾을 수 없어요.",  status: 404 },
-  P0004: { code: API_ERROR_CODE.CANNOT_LIKE_OWN, message: "내 글은 라이크할 수 없어요.", status: 403 },
   "23505": { code: API_ERROR_CODE.ALREADY_LIKED, message: "이미 라이크한 글이에요.", status: 409 },
 };
 
