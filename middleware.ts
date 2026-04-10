@@ -1,9 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// 인증이 필요한 경로 (미로그인 시 /auth/login 으로 리다이렉트)
-const AUTH_REQUIRED_PATHS = ["/onboarding"];
-
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -38,14 +35,6 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-
-  // 인증 필요 경로 → 미로그인 시 로그인으로
-  const needsAuth = AUTH_REQUIRED_PATHS.some((p) => pathname.startsWith(p));
-  if (needsAuth && !user) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/auth/login";
-    return NextResponse.redirect(loginUrl);
-  }
 
   // 로그인 페이지 → 이미 로그인된 경우 피드로
   if (pathname === "/auth/login" && user) {

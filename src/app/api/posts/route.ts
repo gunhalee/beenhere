@@ -6,13 +6,45 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createPost } from "@/lib/posts/mutations";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
+import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { CreatePostBody } from "@/types/api";
+
+const WRITE_RATE_LIMIT = 10;
+const WRITE_RATE_WINDOW_SECONDS = 60;
+const RATE_LIMIT_CONSENT_KEY = "rate_limit_write_at";
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
+
+function hasRateLimitConsent(userMetadata: unknown) {
+  if (!userMetadata || typeof userMetadata !== "object" || Array.isArray(userMetadata)) {
+    return false;
+  }
+
+  const consents = (userMetadata as { consents?: unknown }).consents;
+  if (!consents || typeof consents !== "object" || Array.isArray(consents)) {
+    return false;
+  }
+
+  return typeof (consents as Record<string, unknown>)[RATE_LIMIT_CONSENT_KEY] === "string";
+}
+
+function calculateRetryAfterSeconds(resetAt: string | null) {
+  if (!resetAt) {
+    return null;
+  }
+
+  const resetTimeMs = Date.parse(resetAt);
+  if (!Number.isFinite(resetTimeMs)) {
+    return null;
+  }
+
+  const seconds = Math.ceil((resetTimeMs - Date.now()) / 1000);
+  return Math.max(seconds, 0);
+}
 
 export async function POST(request: Request) {
   const bodyResult = await readJsonBody<CreatePostBody>(request);
@@ -56,15 +88,25 @@ export async function POST(request: Request) {
       );
     }
 
-    await ensureProfileExistsForUser(supabase, user.id);
+    const isAnonymous = Boolean(user.is_anonymous);
+
+    await ensureProfileExistsForUser(supabase, user.id, isAnonymous);
+    await touchProfileActivity({
+      supabase,
+      userId: user.id,
+      isAnonymous,
+    });
 
     const quota = await consumeAnonymousWriteQuota({
       supabase,
       userId: user.id,
-      isAnonymous: Boolean(user.is_anonymous),
+      isAnonymous,
     });
 
     if (!quota.allowed) {
+      const consentRequired =
+        isAnonymous && !hasRateLimitConsent(user.user_metadata);
+
       return fail(
         "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
         429,
@@ -72,6 +114,10 @@ export async function POST(request: Request) {
         {
           resetAt: quota.resetAt,
           remaining: quota.remaining,
+          retryAfterSeconds: calculateRetryAfterSeconds(quota.resetAt),
+          limit: WRITE_RATE_LIMIT,
+          windowSeconds: WRITE_RATE_WINDOW_SECONDS,
+          consentRequired,
         },
       );
     }

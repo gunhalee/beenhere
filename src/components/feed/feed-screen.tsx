@@ -12,7 +12,7 @@ import {
 import { useFeed } from "@/lib/hooks/use-feed";
 import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
-import { ensureGuestSession } from "@/lib/auth/guest-session";
+import { bootstrapGuestSession } from "@/lib/auth/guest-session";
 import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 import type { FeedItem } from "@/types/domain";
 import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
@@ -57,7 +57,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
   const [guestAuthLoading, setGuestAuthLoading] = useState(false);
   const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
-  const [resumeComposeAfterAuth, setResumeComposeAfterAuth] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
@@ -76,10 +75,9 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     requestLocation,
   } = useFeed();
 
-  const openAccountChoice = useCallback((options?: { resumeCompose?: boolean }) => {
+  const openAccountChoice = useCallback(() => {
     setAccountChoiceError(null);
     setAccountChoiceOpen(true);
-    setResumeComposeAfterAuth(options?.resumeCompose ?? false);
   }, []);
 
   const {
@@ -97,7 +95,11 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     onLocationError: setPostActionError,
     onActionError: setPostActionError,
     onAuthRequired: () => {
-      openAccountChoice();
+      void ensureGuestActor().then((result) => {
+        if (!result.ok && mountedRef.current) {
+          openAccountChoice();
+        }
+      });
     },
     onWriteSettled: () => {
       setResolvedHasProfile(true);
@@ -109,6 +111,56 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     ? Math.max(pullDistance, PULL_TO_REFRESH_TRIGGER_PX)
     : pullDistance;
   const pullReady = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
+
+  const syncProfileAfterSession = useCallback(
+    async (fallbackUserId?: string | null) => {
+      const profileResult = await fetchMyProfileClient({ force: true });
+      if (!mountedRef.current) {
+        return false;
+      }
+
+      if (profileResult.ok) {
+        setResolvedCurrentUserId(profileResult.data.id);
+        setResolvedCurrentNickname(profileResult.data.nickname);
+        setResolvedHasProfile(profileResult.data.profileCreated ?? true);
+        return true;
+      }
+
+      if (fallbackUserId) {
+        setResolvedCurrentUserId(fallbackUserId);
+        setResolvedCurrentNickname("게스트");
+        setResolvedHasProfile(false);
+        return true;
+      }
+
+      setResolvedCurrentUserId(null);
+      setResolvedCurrentNickname(null);
+      setResolvedHasProfile(false);
+      return false;
+    },
+    [mountedRef],
+  );
+
+  const ensureGuestActor = useCallback(async () => {
+    const sessionResult = await bootstrapGuestSession({
+      maxAttempts: 3,
+      initialDelayMs: 300,
+      backoffFactor: 3,
+      jitterMs: 120,
+    });
+
+    if (!sessionResult.ok) {
+      if (mountedRef.current) {
+        setResolvedCurrentUserId(null);
+        setResolvedCurrentNickname(null);
+        setResolvedHasProfile(false);
+      }
+      return sessionResult;
+    }
+
+    await syncProfileAfterSession(sessionResult.userId);
+    return sessionResult;
+  }, [mountedRef, syncProfileAfterSession]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -138,14 +190,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       const result = await fetchMyProfileClient();
       if (!mountedRef.current) return;
 
-      if (!result.ok) {
-        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
-          setResolvedCurrentUserId(null);
-          setResolvedCurrentNickname(null);
-          setResolvedHasProfile(false);
-        }
+      if (!result.ok && result.code === API_ERROR_CODE.UNAUTHORIZED) {
+        await ensureGuestActor();
         return;
       }
+
+      if (!result.ok) return;
 
       setResolvedCurrentUserId(result.data.id);
       setResolvedCurrentNickname(result.data.nickname);
@@ -153,7 +203,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     }
 
     void resolveCurrentProfile();
-  }, [mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
+  }, [ensureGuestActor, mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
 
   const openComposeSheet = useCallback(async () => {
     if (composeLocating) return;
@@ -188,8 +238,13 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
 
   async function handleComposeClick() {
     if (!resolvedCurrentUserId) {
-      openAccountChoice({ resumeCompose: true });
-      return;
+      const sessionResult = await ensureGuestActor();
+      if (!sessionResult.ok) {
+        if (mountedRef.current) {
+          setComposeError(sessionResult.error);
+        }
+        return;
+      }
     }
 
     await openComposeSheet();
@@ -201,7 +256,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     setGuestAuthLoading(true);
     setAccountChoiceError(null);
 
-    const sessionResult = await ensureGuestSession();
+    const sessionResult = await bootstrapGuestSession({
+      maxAttempts: 3,
+      initialDelayMs: 300,
+      backoffFactor: 3,
+      jitterMs: 120,
+    });
     if (!sessionResult.ok) {
       if (mountedRef.current) {
         setGuestAuthLoading(false);
@@ -210,23 +270,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       return;
     }
 
-    const profileResult = await fetchMyProfileClient({ force: true });
+    await syncProfileAfterSession(sessionResult.userId);
     if (!mountedRef.current) return;
-
-    if (profileResult.ok) {
-      setResolvedCurrentUserId(profileResult.data.id);
-      setResolvedCurrentNickname(profileResult.data.nickname);
-      setResolvedHasProfile(profileResult.data.profileCreated ?? true);
-    } else {
-      // Fallback for transient profile-read failures right after session bootstrap.
-      setResolvedCurrentUserId(sessionResult.userId);
-      setResolvedCurrentNickname("게스트");
-      setResolvedHasProfile(false);
-    }
 
     setGuestAuthLoading(false);
     setAccountChoiceOpen(false);
-  }, [googleAuthLoading, guestAuthLoading, mountedRef]);
+  }, [googleAuthLoading, guestAuthLoading, mountedRef, syncProfileAfterSession]);
 
   const handleGoogleContinue = useCallback(async () => {
     if (guestAuthLoading || googleAuthLoading) return;
@@ -245,15 +294,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       setAccountChoiceError(result.error ?? "Google 가입을 시작하지 못했어요.");
     }
   }, [googleAuthLoading, guestAuthLoading, mountedRef]);
-
-  useEffect(() => {
-    if (!resumeComposeAfterAuth) return;
-    if (accountChoiceOpen) return;
-    if (!resolvedCurrentUserId) return;
-
-    setResumeComposeAfterAuth(false);
-    void openComposeSheet();
-  }, [accountChoiceOpen, openComposeSheet, resolvedCurrentUserId, resumeComposeAfterAuth]);
 
   function handleDismissCompose() {
     setComposeState({ open: false });
@@ -508,7 +548,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         onClose={() => {
           if (guestAuthLoading || googleAuthLoading) return;
           setAccountChoiceOpen(false);
-          setResumeComposeAfterAuth(false);
         }}
       />
     </div>

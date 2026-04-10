@@ -28,9 +28,22 @@ async function readExistingNickname(
 export async function ensureProfileExistsForUser(
   supabase: SupabaseServerClient,
   userId: string,
+  isAnonymous: boolean,
 ): Promise<EnsureProfileResult> {
+  const accountType = isAnonymous ? "guest" : "member";
+  const guestStatus = isAnonymous ? "active" : null;
+
   const existingNickname = await readExistingNickname(supabase, userId);
   if (existingNickname) {
+    await supabase
+      .from("profiles")
+      .update({
+        account_type: accountType,
+        guest_status: guestStatus,
+        last_active_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
     return {
       created: false,
       nickname: formatNicknameForDisplay(existingNickname),
@@ -41,7 +54,13 @@ export async function ensureProfileExistsForUser(
     const nickname = generateNickname();
     const { error } = await supabase
       .from("profiles")
-      .insert({ id: userId, nickname });
+      .insert({
+        id: userId,
+        nickname,
+        account_type: accountType,
+        guest_status: guestStatus,
+        last_active_at: new Date().toISOString(),
+      });
 
     if (!error) {
       return {

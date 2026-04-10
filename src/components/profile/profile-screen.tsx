@@ -66,6 +66,17 @@ const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
   },
 };
 
+const UPGRADE_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
+  merged: {
+    tone: "success",
+    message: "게스트 계정 데이터가 현재 계정으로 병합됐어요.",
+  },
+  failed: {
+    tone: "error",
+    message: "게스트 계정 데이터 병합에 실패했어요. 잠시 후 다시 시도해 주세요.",
+  },
+};
+
 type ProfileLikeableItem = {
   postId: string;
   likeCount: number;
@@ -189,6 +200,27 @@ export function ProfileScreen({ userId }: Props) {
     isMyProfile && viewerIsAnonymous && !viewerGoogleLinked && viewerCanLinkGoogle;
   const linkStatus = searchParams.get("google_link");
   const linkReason = searchParams.get("google_link_reason");
+  const upgradeStatus = searchParams.get("upgrade");
+  const upgradeReason = searchParams.get("upgrade_reason");
+  const upgradeResultMessage = useMemo(() => {
+    if (!isMyProfile) return null;
+    if (!upgradeStatus) return null;
+
+    const key = upgradeStatus.toLowerCase();
+    if (key === "merged") {
+      return UPGRADE_RESULT_MESSAGES.merged;
+    }
+
+    if (key === "failed") {
+      const reasonText = upgradeReason ? ` (사유: ${upgradeReason})` : "";
+      return {
+        ...UPGRADE_RESULT_MESSAGES.failed,
+        message: `${UPGRADE_RESULT_MESSAGES.failed.message}${reasonText}`,
+      };
+    }
+
+    return null;
+  }, [isMyProfile, upgradeReason, upgradeStatus]);
   const linkResultMessage = useMemo(() => {
     if (linkStatus === "success") {
       return {
@@ -321,6 +353,26 @@ export function ProfileScreen({ userId }: Props) {
           setNicknameChangedAt(changedAt);
         }}
       />
+
+      {upgradeResultMessage ? (
+        <div
+          role={upgradeResultMessage.tone === "error" ? "alert" : "status"}
+          style={{
+            background:
+              upgradeResultMessage.tone === "error" ? "#fef2f2" : "#ecfdf3",
+            borderBottom:
+              upgradeResultMessage.tone === "error"
+                ? "1px solid #fecaca"
+                : "1px solid #bbf7d0",
+            color: upgradeResultMessage.tone === "error" ? "#b91c1c" : "#166534",
+            fontSize: "13px",
+            lineHeight: 1.5,
+            padding: "10px 20px",
+          }}
+        >
+          <div>{upgradeResultMessage.message}</div>
+        </div>
+      ) : null}
 
       {isMyProfile && linkResultMessage ? (
         <div

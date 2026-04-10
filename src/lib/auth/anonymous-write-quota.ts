@@ -14,8 +14,8 @@ type ConsumeQuotaResult = {
   resetAt: string | null;
 };
 
-const ANONYMOUS_WRITE_LIMIT = 20;
-const ANONYMOUS_WRITE_WINDOW_SECONDS = 300;
+const ANONYMOUS_WRITE_LIMIT = 10;
+const ANONYMOUS_WRITE_WINDOW_SECONDS = 60;
 
 function isCompatibilityMissingError(error: { code?: string; message?: string } | null) {
   if (!error) return false;

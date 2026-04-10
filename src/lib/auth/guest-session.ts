@@ -11,6 +11,22 @@ type EnsureGuestSessionResult =
   | { ok: true; userId: string; restored: boolean }
   | { ok: false; error: string };
 
+type EnsureGuestSessionWithRetryOptions = {
+  maxAttempts?: number;
+  initialDelayMs?: number;
+  backoffFactor?: number;
+  jitterMs?: number;
+};
+
+const DEFAULT_RETRY_OPTIONS: Required<EnsureGuestSessionWithRetryOptions> = {
+  maxAttempts: 3,
+  initialDelayMs: 300,
+  backoffFactor: 3,
+  jitterMs: 120,
+};
+
+let inFlightBootstrap: Promise<EnsureGuestSessionResult> | null = null;
+
 function canUseLocalStorage() {
   return typeof window !== "undefined" && "localStorage" in window;
 }
@@ -62,6 +78,21 @@ function saveGuestSession(input: { refreshToken: string; userId: string }) {
 
 export function readLastGuestUserId() {
   return readStorage(GUEST_USER_ID_STORAGE_KEY);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function computeRetryDelay(
+  attemptIndex: number,
+  options: Required<EnsureGuestSessionWithRetryOptions>,
+) {
+  const exponentialDelay = options.initialDelayMs * options.backoffFactor ** attemptIndex;
+  const jitter = Math.floor(Math.random() * (options.jitterMs + 1));
+  return exponentialDelay + jitter;
 }
 
 export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
@@ -123,4 +154,47 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
   clearProfileCache();
 
   return { ok: true, userId: created.data.session.user.id, restored: false };
+}
+
+export async function ensureGuestSessionWithRetry(
+  options?: EnsureGuestSessionWithRetryOptions,
+): Promise<EnsureGuestSessionResult> {
+  const resolvedOptions = {
+    ...DEFAULT_RETRY_OPTIONS,
+    ...options,
+  };
+
+  let lastError = "게스트 세션을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.";
+
+  for (let attempt = 0; attempt < resolvedOptions.maxAttempts; attempt += 1) {
+    const result = await ensureGuestSession();
+    if (result.ok) {
+      return result;
+    }
+
+    lastError = result.error;
+    const isLastAttempt = attempt === resolvedOptions.maxAttempts - 1;
+    if (isLastAttempt) {
+      break;
+    }
+
+    const delayMs = computeRetryDelay(attempt, resolvedOptions);
+    await sleep(delayMs);
+  }
+
+  return { ok: false, error: lastError };
+}
+
+export async function bootstrapGuestSession(
+  options?: EnsureGuestSessionWithRetryOptions,
+) {
+  if (inFlightBootstrap) {
+    return inFlightBootstrap;
+  }
+
+  inFlightBootstrap = ensureGuestSessionWithRetry(options).finally(() => {
+    inFlightBootstrap = null;
+  });
+
+  return inFlightBootstrap;
 }

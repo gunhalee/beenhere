@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { GuestSessionBootstrap } from "@/components/auth/guest-session-bootstrap";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -22,8 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body>
+        <GuestSessionBootstrap />
+        {children}
+      </body>
     </html>
   );
 }
-

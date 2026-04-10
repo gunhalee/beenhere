@@ -56,6 +56,14 @@ function hasLinkedProvider(
   return identityLinked || appMetadataProvider === normalizedProvider || metadataLinked;
 }
 
+function isActivityRpcCompatibilityMissing(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
+    return true;
+  }
+  return /touch_profile_activity/i.test(error.message ?? "");
+}
+
 // ---------------------------
 // 프로필 조회
 // ---------------------------
@@ -92,6 +100,14 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
   const googleLinked = hasLinkedProvider(user, "google");
   const isAnonymous = Boolean(user.is_anonymous);
   const canLinkGoogle = !googleLinked;
+
+  const { error: activityError } = await supabase.rpc("touch_profile_activity", {
+    p_user_id: user.id,
+    p_is_anonymous: isAnonymous,
+  });
+  if (activityError && !isActivityRpcCompatibilityMissing(activityError)) {
+    throw activityError;
+  }
 
   const { data, error } = await supabase
     .from("profiles")

@@ -1,10 +1,14 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { mergeGuestIntoMember } from "@/lib/auth/guest-upgrade";
 
 const LINK_GOOGLE_INTENT = "link-google";
 const LINK_STATUS_PARAM = "google_link";
 const LINK_REASON_PARAM = "google_link_reason";
+const UPGRADE_STATUS_PARAM = "upgrade";
+const UPGRADE_REASON_PARAM = "upgrade_reason";
 
 function sanitizeNextPath(next: string | null): string {
   if (!next) return "/";
@@ -29,6 +33,22 @@ function redirectWithLinkStatus(input: {
   targetUrl.searchParams.set(LINK_STATUS_PARAM, input.status);
   if (input.reason) {
     targetUrl.searchParams.set(LINK_REASON_PARAM, input.reason);
+  }
+  return NextResponse.redirect(targetUrl.toString());
+}
+
+function redirectWithUpgradeStatus(input: {
+  origin: string;
+  nextPath: string;
+  status?: "merged" | "failed";
+  reason?: string;
+}) {
+  const targetUrl = new URL(input.nextPath, input.origin);
+  if (input.status) {
+    targetUrl.searchParams.set(UPGRADE_STATUS_PARAM, input.status);
+  }
+  if (input.reason) {
+    targetUrl.searchParams.set(UPGRADE_REASON_PARAM, input.reason);
   }
   return NextResponse.redirect(targetUrl.toString());
 }
@@ -69,6 +89,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user: previousUser },
+  } = await supabase.auth.getUser();
+  const previousGuestUserId =
+    previousUser?.is_anonymous === true ? previousUser.id : null;
+
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
@@ -103,6 +129,30 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login`);
   }
 
+  await ensureProfileExistsForUser(supabase, user.id, Boolean(user.is_anonymous));
+
+  let upgradeStatus: "merged" | "failed" | undefined;
+  let upgradeReason: string | undefined;
+  const canAttemptMerge =
+    !isLinkGoogleIntent &&
+    previousGuestUserId &&
+    previousGuestUserId !== user.id &&
+    user.is_anonymous !== true;
+
+  if (canAttemptMerge) {
+    const mergeResult = await mergeGuestIntoMember({
+      guestUserId: previousGuestUserId,
+      memberUserId: user.id,
+    });
+
+    if (mergeResult.ok) {
+      upgradeStatus = "merged";
+    } else {
+      upgradeStatus = "failed";
+      upgradeReason = normalizeReason(mergeResult.code ?? mergeResult.error, "merge_failed");
+    }
+  }
+
   if (isLinkGoogleIntent) {
     return redirectWithLinkStatus({
       origin,
@@ -111,6 +161,10 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.redirect(`${origin}${nextPath}`);
+  return redirectWithUpgradeStatus({
+    origin,
+    nextPath,
+    status: upgradeStatus,
+    reason: upgradeReason,
+  });
 }
-

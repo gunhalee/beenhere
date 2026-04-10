@@ -1,7 +1,8 @@
 import { fail, ok } from "@/lib/api/response";
-import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { parseCoordinatesFromSearchParams } from "@/lib/api/coordinates";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getProfileLikesRepository } from "@/lib/profiles/repository";
 
 type Context = { params: Promise<{ userId: string }> };
@@ -28,6 +29,20 @@ export async function GET(request: Request, context: Context) {
   }
 
   try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const isOwnArchive = Boolean(user?.id && user.id === userId);
+    if (isOwnArchive && user?.is_anonymous) {
+      return fail(
+        API_ERROR_MESSAGE.LOGIN_REQUIRED_FOR_ARCHIVE,
+        403,
+        API_ERROR_CODE.LOGIN_REQUIRED_FOR_ARCHIVE,
+      );
+    }
+
     const result = await getProfileLikesRepository({
       userId,
       cursor,

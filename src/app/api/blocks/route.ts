@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createBlockRepository } from "@/lib/blocks/repository";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
+import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { CreateBlockBody } from "@/types/api";
 
 export async function POST(request: Request) {
@@ -47,12 +48,19 @@ export async function POST(request: Request) {
     );
   }
 
-  await ensureProfileExistsForUser(supabase, user.id);
+  const isAnonymous = Boolean(user.is_anonymous);
+
+  await ensureProfileExistsForUser(supabase, user.id, isAnonymous);
+  await touchProfileActivity({
+    supabase,
+    userId: user.id,
+    isAnonymous,
+  });
 
   const quota = await consumeAnonymousWriteQuota({
     supabase,
     userId: user.id,
-    isAnonymous: Boolean(user.is_anonymous),
+    isAnonymous,
   });
 
   if (!quota.allowed) {

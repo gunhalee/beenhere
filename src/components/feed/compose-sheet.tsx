@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Coordinates } from "@/lib/geo/browser-location";
 import { resolvePlaceLabelWithCache } from "@/lib/geo/place-label-cache";
-import { createPostClient } from "@/lib/api/feed-client";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import { createPostClient, submitRateLimitConsentClient } from "@/lib/api/feed-client";
 import type { FeedItem } from "@/types/domain";
 import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 
@@ -13,6 +14,13 @@ type ComposeStatus =
   | "ready"
   | "submitting"
   | "error";
+
+type RateLimitDetails = {
+  consentRequired: boolean;
+  retryAfterSeconds: number | null;
+  limit: number | null;
+  windowSeconds: number | null;
+};
 
 type Props = {
   coords: Coordinates;
@@ -33,8 +41,54 @@ export function ComposeSheet({
   const [placeLabel, setPlaceLabel] = useState<string>("현재 위치");
   const [content, setContent] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [rateLimitDetails, setRateLimitDetails] = useState<RateLimitDetails | null>(null);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [consentSubmitting, setConsentSubmitting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mountedRef = useMountedRef();
+
+  function parseRateLimitDetails(details: unknown): RateLimitDetails {
+    if (!details || typeof details !== "object" || Array.isArray(details)) {
+      return {
+        consentRequired: false,
+        retryAfterSeconds: null,
+        limit: null,
+        windowSeconds: null,
+      };
+    }
+
+    const record = details as Record<string, unknown>;
+    return {
+      consentRequired: record.consentRequired === true,
+      retryAfterSeconds:
+        typeof record.retryAfterSeconds === "number" && Number.isFinite(record.retryAfterSeconds)
+          ? Math.max(Math.floor(record.retryAfterSeconds), 0)
+          : null,
+      limit:
+        typeof record.limit === "number" && Number.isFinite(record.limit)
+          ? record.limit
+          : null,
+      windowSeconds:
+        typeof record.windowSeconds === "number" && Number.isFinite(record.windowSeconds)
+          ? record.windowSeconds
+          : null,
+    };
+  }
+
+  function formatRetryAfter(seconds: number | null) {
+    if (seconds === null) {
+      return "잠시 후 다시 시도해 주세요.";
+    }
+    if (seconds <= 0) {
+      return "지금 다시 시도해 주세요.";
+    }
+    if (seconds < 60) {
+      return `${seconds}초 후 다시 시도해 주세요.`;
+    }
+
+    const minutes = Math.ceil(seconds / 60);
+    return `약 ${minutes}분 후 다시 시도해 주세요.`;
+  }
 
   // 시트는 즉시 편집 가능하게 열고, 장소 라벨은 백그라운드로 갱신한다.
   useEffect(() => {
@@ -55,15 +109,13 @@ export function ComposeSheet({
       });
   }, [coords, mountedRef]);
 
-  async function handleSubmit() {
-    const trimmed = content.trim();
-    if (!trimmed || status !== "ready") return;
-
+  async function submitPost(trimmedContent: string) {
     setStatus("submitting");
     setErrorMessage(null);
+    setRateLimitDetails(null);
 
     const result = await createPostClient({
-      content: trimmed,
+      content: trimmedContent,
       latitude: coords.latitude,
       longitude: coords.longitude,
       placeLabel,
@@ -72,6 +124,21 @@ export function ComposeSheet({
     if (!mountedRef.current) return;
 
     if (!result.ok) {
+      if (result.code === API_ERROR_CODE.RATE_LIMITED) {
+        const details = parseRateLimitDetails(result.details);
+        setRateLimitDetails(details);
+        setStatus("error");
+
+        if (details.consentRequired) {
+          setConsentDialogOpen(true);
+          setErrorMessage("작성이 일시적으로 제한되었어요. 계속하려면 안내에 동의해 주세요.");
+          return;
+        }
+
+        setErrorMessage(`작성 제한에 도달했어요. ${formatRetryAfter(details.retryAfterSeconds)}`);
+        return;
+      }
+
       setStatus("error");
       setErrorMessage(result.error ?? "글을 올리지 못했어요. 다시 시도해 주세요.");
       return;
@@ -79,7 +146,7 @@ export function ComposeSheet({
 
     const newItem: FeedItem = {
       postId: result.data.postId,
-      content: trimmed,
+      content: trimmedContent,
       authorId: currentUserId ?? "unknown",
       authorNickname: currentNickname ?? "나",
       lastSharerId: currentUserId ?? "unknown",
@@ -92,6 +159,36 @@ export function ComposeSheet({
     };
 
     onSuccess(newItem);
+  }
+
+  async function handleSubmit() {
+    const trimmed = content.trim();
+    if (!trimmed || status !== "ready") return;
+
+    await submitPost(trimmed);
+  }
+
+  async function handleConsentAgree() {
+    if (consentSubmitting) return;
+
+    setConsentSubmitting(true);
+    const consentResult = await submitRateLimitConsentClient();
+    if (!mountedRef.current) return;
+
+    if (!consentResult.ok) {
+      setConsentSubmitting(false);
+      setErrorMessage(consentResult.error ?? "동의 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+
+    setConsentDialogOpen(false);
+    setConsentSubmitting(false);
+    setStatus("ready");
+
+    const trimmed = content.trim();
+    if (trimmed) {
+      await submitPost(trimmed);
+    }
   }
 
   const remaining = MAX_CHARS - content.length;
@@ -184,6 +281,9 @@ export function ComposeSheet({
             maxLength={MAX_CHARS + 10}
             onChange={(e) => {
               setContent(e.target.value);
+              if (consentDialogOpen) {
+                setConsentDialogOpen(false);
+              }
               if (status === "error") setStatus("ready");
             }}
             placeholder="지금 이 장소에서 떠오르는 이야기를 남겨보세요"
@@ -248,6 +348,128 @@ export function ComposeSheet({
           </button>
         </div>
       </div>
+
+      {consentDialogOpen ? (
+        <>
+          <button
+            aria-label="닫기"
+            onClick={() => {
+              if (consentSubmitting) return;
+              setConsentDialogOpen(false);
+            }}
+            type="button"
+            style={{
+              appearance: "none",
+              background: "rgba(17, 24, 39, 0.45)",
+              border: "none",
+              cursor: consentSubmitting ? "default" : "pointer",
+              inset: 0,
+              padding: 0,
+              position: "fixed",
+              zIndex: 30,
+            }}
+          />
+          <div
+            aria-label="작성 제한 안내"
+            aria-modal="true"
+            role="dialog"
+            style={{
+              background: "#ffffff",
+              borderRadius: "20px",
+              boxShadow: "0 18px 50px rgba(17, 24, 39, 0.2)",
+              left: "50%",
+              maxWidth: "360px",
+              padding: "24px",
+              position: "fixed",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "calc(100% - 32px)",
+              zIndex: 31,
+            }}
+          >
+            <h2
+              style={{
+                color: "#111827",
+                fontSize: "18px",
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                margin: "0 0 10px",
+                textAlign: "center",
+              }}
+            >
+              작성 제한 안내
+            </h2>
+            <p
+              style={{
+                color: "#4b5563",
+                fontSize: "13px",
+                lineHeight: 1.6,
+                margin: "0 0 14px",
+              }}
+            >
+              과도한 도배를 막기 위해 작성 빈도를 제한하고 있어요.
+              동의하면 제한 시간이 지나자마자 다시 작성할 수 있어요.
+            </p>
+            <p
+              style={{
+                color: "#6b7280",
+                fontSize: "12px",
+                lineHeight: 1.5,
+                margin: "0 0 16px",
+              }}
+            >
+              {rateLimitDetails?.limit && rateLimitDetails.windowSeconds
+                ? `${rateLimitDetails.windowSeconds}초 동안 최대 ${rateLimitDetails.limit}회 작성할 수 있어요.`
+                : "잠시 후 다시 시도해 주세요."}
+              {" "}
+              {formatRetryAfter(rateLimitDetails?.retryAfterSeconds ?? null)}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <button
+                disabled={consentSubmitting}
+                onClick={() => {
+                  void handleConsentAgree();
+                }}
+                type="button"
+                style={{
+                  appearance: "none",
+                  background: consentSubmitting ? "#9ca3af" : "#111827",
+                  border: "none",
+                  borderRadius: "12px",
+                  color: "#ffffff",
+                  cursor: consentSubmitting ? "default" : "pointer",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  padding: "12px 14px",
+                  textAlign: "center",
+                }}
+              >
+                {consentSubmitting ? "동의 처리 중..." : "동의하고 다시 시도"}
+              </button>
+              <button
+                disabled={consentSubmitting}
+                onClick={() => {
+                  setConsentDialogOpen(false);
+                }}
+                type="button"
+                style={{
+                  appearance: "none",
+                  background: "none",
+                  border: "none",
+                  color: "#6b7280",
+                  cursor: consentSubmitting ? "default" : "pointer",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  padding: "6px 0 0",
+                  textAlign: "center",
+                }}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

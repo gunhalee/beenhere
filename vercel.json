@@ -4,6 +4,10 @@
     {
       "path": "/api/internal/feed/state/refresh",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/internal/guests/anonymize",
+      "schedule": "15 0 * * *"
     }
   ]
 }

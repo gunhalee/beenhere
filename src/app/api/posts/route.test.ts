@@ -122,4 +122,52 @@ describe("POST /api/posts", () => {
     expect(json.code).toBe("UNAUTHORIZED");
     expect(createPost).not.toHaveBeenCalled();
   });
+
+  it("returns rate-limit metadata including consent flag for anonymous users", async () => {
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "guest-1",
+              is_anonymous: true,
+              user_metadata: {},
+            },
+          },
+        }),
+      },
+    } as never);
+    vi.mocked(consumeAnonymousWriteQuota).mockResolvedValue({
+      allowed: false,
+      remaining: 0,
+      resetAt: new Date(Date.now() + 30_000).toISOString(),
+    });
+
+    const response = await POST(
+      makeJsonRequest({
+        content: "hello",
+        latitude: 37.5,
+        longitude: 127.0,
+        placeLabel: "Gangnam-gu",
+      }),
+    );
+    const json = (await response.json()) as {
+      ok: boolean;
+      code?: string;
+      details?: {
+        limit?: number;
+        windowSeconds?: number;
+        consentRequired?: boolean;
+      };
+    };
+
+    expect(response.status).toBe(429);
+    expect(json.ok).toBe(false);
+    expect(json.code).toBe("RATE_LIMITED");
+    expect(json.details?.limit).toBe(10);
+    expect(json.details?.windowSeconds).toBe(60);
+    expect(json.details?.consentRequired).toBe(true);
+    expect(createPost).not.toHaveBeenCalled();
+  });
 });

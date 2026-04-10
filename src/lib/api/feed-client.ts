@@ -44,6 +44,11 @@ type CreatePostBodyClient = {
   clientRequestId?: string;
 };
 
+type RateLimitConsentResponse = {
+  consent: string;
+  grantedAt: string;
+};
+
 const inFlightNearbyRequests = new Map<string, Promise<ApiResult<FeedData>>>();
 let cachedFeedState: CachedFeedState | null = null;
 let inFlightFeedStateRequest: Promise<ApiResult<FeedStateData>> | null = null;
@@ -193,6 +198,15 @@ export async function createPostClient(body: CreatePostBodyClient) {
   );
 }
 
+export async function submitRateLimitConsentClient() {
+  return fetchApi<RateLimitConsentResponse>("/api/consents/rate-limit", {
+    method: "POST",
+    timeoutMs: FEED_WRITE_TIMEOUT_MS,
+    timeoutErrorMessage: "동의 처리가 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+    timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_CREATE,
+  });
+}
+
 // ---------------------------
 // Like
 // ---------------------------
@@ -245,4 +259,3 @@ export function clearFeedClientCache() {
   clearFeedStateCache();
   inFlightNearbyRequests.clear();
 }
-

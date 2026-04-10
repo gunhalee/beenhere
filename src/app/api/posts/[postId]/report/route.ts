@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { reportPost } from "@/lib/posts/mutations";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
+import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { ReportPostBody } from "@/types/api";
 
 type Context = { params: Promise<{ postId: string }> };
@@ -36,12 +37,19 @@ export async function POST(request: Request, context: Context) {
       );
     }
 
-    await ensureProfileExistsForUser(supabase, user.id);
+    const isAnonymous = Boolean(user.is_anonymous);
+
+    await ensureProfileExistsForUser(supabase, user.id, isAnonymous);
+    await touchProfileActivity({
+      supabase,
+      userId: user.id,
+      isAnonymous,
+    });
 
     const quota = await consumeAnonymousWriteQuota({
       supabase,
       userId: user.id,
-      isAnonymous: Boolean(user.is_anonymous),
+      isAnonymous,
     });
 
     if (!quota.allowed) {
