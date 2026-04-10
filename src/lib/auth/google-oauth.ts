@@ -1,9 +1,13 @@
 "use client";
 
 import { clearMyProfileCache, clearProfileCache } from "@/lib/api/profile-client";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-type GoogleOAuthIntent = "login" | "link-google";
+import { fetchApi } from "@/lib/api/client";
+import {
+  type GoogleOAuthIntent,
+  sanitizeGuestUserId,
+  sanitizeNextPath,
+} from "@/lib/auth/google-oauth-common";
+import { readLastGuestUserID } from "@/lib/auth/guest-session";
 
 type StartGoogleOAuthInput = {
   intent: GoogleOAuthIntent;
@@ -14,18 +18,9 @@ type StartGoogleOAuthResult =
   | { ok: true }
   | { ok: false; error: string };
 
-function sanitizeNextPath(nextPath?: string): string {
-  if (!nextPath) return "/";
-  if (!nextPath.startsWith("/") || nextPath.startsWith("//")) return "/";
-  return nextPath;
-}
-
-function buildCallbackUrl(input: StartGoogleOAuthInput): string {
-  const callbackUrl = new URL("/auth/callback", window.location.origin);
-  callbackUrl.searchParams.set("intent", input.intent);
-  callbackUrl.searchParams.set("next", sanitizeNextPath(input.nextPath));
-  return callbackUrl.toString();
-}
+type StartGoogleOAuthApiResponse = {
+  url: string;
+};
 
 export async function startGoogleOAuth(
   input: StartGoogleOAuthInput,
@@ -33,28 +28,42 @@ export async function startGoogleOAuth(
   clearMyProfileCache();
   clearProfileCache();
 
-  const redirectTo = buildCallbackUrl(input);
-  const supabase = getSupabaseBrowserClient();
+  const apiResult = await fetchApi<StartGoogleOAuthApiResponse>(
+    "/api/auth/google/start",
+    {
+      method: "POST",
+      body: {
+        intent: input.intent,
+        nextPath: sanitizeNextPath(input.nextPath),
+        guestUserId: sanitizeGuestUserId(readLastGuestUserID()),
+      },
+      timeoutMs: 5000,
+      timeoutErrorMessage: "Google 인증 시작이 지연되고 있어요.",
+    },
+  );
 
-  if (input.intent === "link-google") {
-    const { error } = await supabase.auth.linkIdentity({
-      provider: "google",
-      options: { redirectTo },
-    });
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-    return { ok: true };
+  if (!apiResult.ok) {
+    return {
+      ok: false,
+      error: apiResult.error ?? "Google 인증을 시작하지 못했어요.",
+    };
   }
 
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo },
-  });
-
-  if (error) {
-    return { ok: false, error: error.message };
+  if (typeof window === "undefined") {
+    return {
+      ok: false,
+      error: "브라우저 환경에서만 Google 인증을 시작할 수 있어요.",
+    };
   }
+
+  const redirectUrl = apiResult.data.url;
+  if (!redirectUrl) {
+    return {
+      ok: false,
+      error: "Google 인증 URL을 받지 못했어요.",
+    };
+  }
+
+  window.location.assign(redirectUrl);
   return { ok: true };
 }

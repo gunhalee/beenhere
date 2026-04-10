@@ -43,9 +43,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [resolvedCurrentNickname, setResolvedCurrentNickname] = useState<string | null>(
     currentNickname ?? null,
   );
-  const [resolvedHasProfile, setResolvedHasProfile] = useState(
-    Boolean(currentUserId && currentNickname),
-  );
   const [composeState, setComposeState] = useState<ComposeState>({ open: false });
   const [composeLocating, setComposeLocating] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
@@ -101,9 +98,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
         }
       });
     },
-    onWriteSettled: () => {
-      setResolvedHasProfile(true);
-    },
   });
 
   const locationAvailable = !state.locationDenied;
@@ -122,38 +116,29 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       if (profileResult.ok) {
         setResolvedCurrentUserId(profileResult.data.id);
         setResolvedCurrentNickname(profileResult.data.nickname);
-        setResolvedHasProfile(profileResult.data.profileCreated ?? true);
         return true;
       }
 
       if (fallbackUserId) {
         setResolvedCurrentUserId(fallbackUserId);
         setResolvedCurrentNickname("게스트");
-        setResolvedHasProfile(false);
         return true;
       }
 
       setResolvedCurrentUserId(null);
       setResolvedCurrentNickname(null);
-      setResolvedHasProfile(false);
       return false;
     },
     [mountedRef],
   );
 
   const ensureGuestActor = useCallback(async () => {
-    const sessionResult = await bootstrapGuestSession({
-      maxAttempts: 3,
-      initialDelayMs: 300,
-      backoffFactor: 3,
-      jitterMs: 120,
-    });
+    const sessionResult = await bootstrapGuestSession();
 
     if (!sessionResult.ok) {
       if (mountedRef.current) {
         setResolvedCurrentUserId(null);
         setResolvedCurrentNickname(null);
-        setResolvedHasProfile(false);
       }
       return sessionResult;
     }
@@ -199,7 +184,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
 
       setResolvedCurrentUserId(result.data.id);
       setResolvedCurrentNickname(result.data.nickname);
-      setResolvedHasProfile(result.data.profileCreated ?? true);
     }
 
     void resolveCurrentProfile();
@@ -256,12 +240,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     setGuestAuthLoading(true);
     setAccountChoiceError(null);
 
-    const sessionResult = await bootstrapGuestSession({
-      maxAttempts: 3,
-      initialDelayMs: 300,
-      backoffFactor: 3,
-      jitterMs: 120,
-    });
+    const sessionResult = await bootstrapGuestSession();
     if (!sessionResult.ok) {
       if (mountedRef.current) {
         setGuestAuthLoading(false);
@@ -302,7 +281,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   function handleComposeSuccess(newItem: FeedItem) {
     setComposeState({ open: false });
     prependItem(newItem);
-    setResolvedHasProfile(true);
   }
 
   const handleLikeClick = useCallback(

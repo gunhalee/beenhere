@@ -3,6 +3,7 @@ import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerIte
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { encodeCursor, decodeCursor } from "@/lib/utils/cursor";
 import {
@@ -116,12 +117,18 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
     .single();
 
   if (error || !data) {
+    const ensuredProfile = await ensureProfileExistsForUser(
+      supabase,
+      user.id,
+      isAnonymous,
+    );
+
     return {
       id: user.id,
-      nickname: formatNicknameForDisplay("게스트"),
+      nickname: ensuredProfile.nickname,
       nicknameChangedAt: null,
       createdAt: user.created_at ?? new Date().toISOString(),
-      profileCreated: false,
+      profileCreated: true,
       isAnonymous,
       googleLinked,
       canLinkGoogle,

@@ -3,18 +3,17 @@ import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { mergeGuestIntoMember } from "@/lib/auth/guest-upgrade";
+import {
+  GUEST_USER_ID_PARAM,
+  sanitizeGuestUserId,
+  sanitizeNextPath,
+} from "@/lib/auth/google-oauth-common";
 
 const LINK_GOOGLE_INTENT = "link-google";
 const LINK_STATUS_PARAM = "google_link";
 const LINK_REASON_PARAM = "google_link_reason";
 const UPGRADE_STATUS_PARAM = "upgrade";
 const UPGRADE_REASON_PARAM = "upgrade_reason";
-
-function sanitizeNextPath(next: string | null): string {
-  if (!next) return "/";
-  if (!next.startsWith("/") || next.startsWith("//")) return "/";
-  return next;
-}
 
 function normalizeReason(reason: string | null, fallback: string): string {
   if (!reason) return fallback;
@@ -59,6 +58,9 @@ export async function GET(request: Request) {
   const intent = searchParams.get("intent");
   const isLinkGoogleIntent = intent === LINK_GOOGLE_INTENT;
   const nextPath = sanitizeNextPath(searchParams.get("next"));
+  const previousGuestUserIdHint = sanitizeGuestUserId(
+    searchParams.get(GUEST_USER_ID_PARAM),
+  );
 
   if (!code) {
     if (isLinkGoogleIntent) {
@@ -92,8 +94,11 @@ export async function GET(request: Request) {
   const {
     data: { user: previousUser },
   } = await supabase.auth.getUser();
-  const previousGuestUserId =
-    previousUser?.is_anonymous === true ? previousUser.id : null;
+  const previousGuestUserId = previousUser
+    ? previousUser.is_anonymous === true
+      ? previousUser.id
+      : null
+    : previousGuestUserIdHint;
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 

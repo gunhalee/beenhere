@@ -30,7 +30,6 @@ type Actions<TItem extends LikeablePostItem, TRemovedItem> = {
   onLocationError?: (message: string) => void;
   onActionError?: (message: string) => void;
   onAuthRequired?: () => void;
-  onWriteSettled?: () => void;
 };
 
 export type ReportState = {
@@ -51,7 +50,6 @@ export function usePostActions<
   onLocationError,
   onActionError,
   onAuthRequired,
-  onWriteSettled,
 }: Actions<TItem, TRemovedItem>) {
   const likePendingRef = useRef<Set<string>>(new Set());
   const deletePendingRef = useRef<Set<string>>(new Set());
@@ -129,12 +127,10 @@ export function usePostActions<
           return;
         }
 
-        onWriteSettled?.();
         onActionError?.(result.error ?? "라이크를 처리하지 못했어요. 다시 시도해 주세요.");
         return;
       }
 
-      onWriteSettled?.();
       updateItem(item.postId, {
         likeCount: result.data.likeCount,
       } as Partial<TItem>);
@@ -142,7 +138,6 @@ export function usePostActions<
     [
       onActionError,
       onAuthRequired,
-      onWriteSettled,
       resolveCoordinates,
       resolveLikePlaceLabel,
       updateItem,
@@ -167,17 +162,14 @@ export function usePostActions<
           return;
         }
 
-        onWriteSettled?.();
         onActionError?.(result.error ?? "글 삭제에 실패했어요. 다시 시도해 주세요.");
         console.error("[usePostActions] 삭제 실패:", result.error);
         return;
       }
-      onWriteSettled?.();
     },
     [
       onActionError,
       onAuthRequired,
-      onWriteSettled,
       removeItemOptimistic,
       restoreRemovedItem,
     ],
@@ -226,18 +218,16 @@ export function usePostActions<
           submitting: false,
           errorMessage: "신고를 처리하지 못했어요. 다시 시도해 주세요.",
         }));
-        onWriteSettled?.();
         return;
       }
 
-      onWriteSettled?.();
       setReportState((s) => ({
         ...s,
         submitting: false,
         successMessage: "신고가 접수됐어요. 검토 후 조치할게요.",
       }));
     },
-    [onAuthRequired, onWriteSettled, reportState.postId, reportState.submitting],
+    [onAuthRequired, reportState.postId, reportState.submitting],
   );
 
   return {

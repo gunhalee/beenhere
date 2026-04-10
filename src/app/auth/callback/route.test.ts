@@ -179,4 +179,26 @@ describe("GET /auth/callback", () => {
     expect(location).toBe("http://localhost/profile/user-1?google_link=success");
     expect(mergeGuestIntoMember).not.toHaveBeenCalled();
   });
+
+  it("uses guest_user_id hint when previous session user is missing", async () => {
+    mockCallbackSupabase({
+      previousUserId: null,
+      currentUserId: "member-1",
+      currentUserAnonymous: false,
+    });
+
+    const request = new Request(
+      "http://localhost/auth/callback?code=abc123&guest_user_id=11111111-1111-4111-8111-111111111111",
+    );
+
+    const response = await GET(request);
+    const location = response.headers.get("location");
+
+    expect(response.status).toBe(307);
+    expect(location).toBe("http://localhost/?upgrade=merged");
+    expect(mergeGuestIntoMember).toHaveBeenCalledWith({
+      guestUserId: "11111111-1111-4111-8111-111111111111",
+      memberUserId: "member-1",
+    });
+  });
 });

@@ -1,15 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getProfileLikesRepository } from "@/lib/profiles/repository";
 
 vi.mock("@/lib/supabase/config", () => ({
   hasSupabaseBrowserConfig: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createSupabaseServerClient: vi.fn(),
 }));
 
 vi.mock("@/lib/profiles/repository", () => ({
@@ -26,31 +21,27 @@ describe("GET /api/profiles/:userId/likes", () => {
     });
   });
 
-  it("returns LOGIN_REQUIRED_FOR_ARCHIVE for anonymous user requesting own likes", async () => {
-    vi.mocked(createSupabaseServerClient).mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: {
-            user: {
-              id: "guest-1",
-              is_anonymous: true,
-            },
-          },
-        }),
-      },
-    } as never);
-
+  it("allows anonymous user to fetch own likes", async () => {
     const response = await GET(
       new Request("http://localhost/api/profiles/guest-1/likes"),
       {
         params: Promise.resolve({ userId: "guest-1" }),
       },
     );
-    const json = (await response.json()) as { ok: boolean; code?: string };
+    const json = (await response.json()) as {
+      ok: boolean;
+      data?: { items: unknown[]; nextCursor: string | null };
+    };
 
-    expect(response.status).toBe(403);
-    expect(json.ok).toBe(false);
-    expect(json.code).toBe("LOGIN_REQUIRED_FOR_ARCHIVE");
-    expect(getProfileLikesRepository).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(getProfileLikesRepository).toHaveBeenCalledTimes(1);
+    expect(getProfileLikesRepository).toHaveBeenCalledWith({
+      userId: "guest-1",
+      cursor: undefined,
+      limit: 20,
+      latitude: undefined,
+      longitude: undefined,
+    });
   });
 });

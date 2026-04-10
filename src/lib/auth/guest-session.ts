@@ -27,6 +27,33 @@ const DEFAULT_RETRY_OPTIONS: Required<EnsureGuestSessionWithRetryOptions> = {
 
 let inFlightBootstrap: Promise<EnsureGuestSessionResult> | null = null;
 
+function isActivityRpcCompatibilityMissing(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  if (error.code === "PGRST202" || error.code === "42883" || error.code === "42P01") {
+    return true;
+  }
+  return /touch_profile_activity/i.test(error.message ?? "");
+}
+
+async function touchGuestLastActive(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  input: { userId: string; isAnonymous: boolean },
+) {
+  if (!input.isAnonymous) return;
+  if (typeof (supabase as { rpc?: unknown }).rpc !== "function") return;
+
+  const { error } = await supabase.rpc("touch_profile_activity", {
+    p_user_id: input.userId,
+    p_is_anonymous: true,
+  });
+
+  if (!error || isActivityRpcCompatibilityMissing(error)) {
+    return;
+  }
+
+  console.warn("[guest-session] failed to touch guest last_active_at", error);
+}
+
 function canUseLocalStorage() {
   return typeof window !== "undefined" && "localStorage" in window;
 }
@@ -76,7 +103,8 @@ function saveGuestSession(input: { refreshToken: string; userId: string }) {
   writeStorage(GUEST_USER_ID_STORAGE_KEY, input.userId);
 }
 
-export function readLastGuestUserId() {
+// Public accessor used by auth handoff flows.
+export function readLastGuestUserID() {
   return readStorage(GUEST_USER_ID_STORAGE_KEY);
 }
 
@@ -110,6 +138,10 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
         userId: currentSession.user.id,
       });
     }
+    await touchGuestLastActive(supabase, {
+      userId: currentSession.user.id,
+      isAnonymous: Boolean(currentSession.user.is_anonymous),
+    });
     return { ok: true, userId: currentSession.user.id, restored: false };
   }
 
@@ -127,6 +159,10 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
       });
       clearMyProfileCache();
       clearProfileCache();
+      await touchGuestLastActive(supabase, {
+        userId: restoredSession.user.id,
+        isAnonymous: Boolean(restoredSession.user.is_anonymous),
+      });
       return { ok: true, userId: restoredSession.user.id, restored: true };
     }
   }
@@ -152,11 +188,15 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
   });
   clearMyProfileCache();
   clearProfileCache();
+  await touchGuestLastActive(supabase, {
+    userId: created.data.session.user.id,
+    isAnonymous: Boolean(created.data.session.user.is_anonymous),
+  });
 
   return { ok: true, userId: created.data.session.user.id, restored: false };
 }
 
-export async function ensureGuestSessionWithRetry(
+async function ensureGuestSessionWithRetry(
   options?: EnsureGuestSessionWithRetryOptions,
 ): Promise<EnsureGuestSessionResult> {
   const resolvedOptions = {
