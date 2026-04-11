@@ -24,7 +24,7 @@ type CachedCoordinatesRecord = Coordinates & { savedAt: number };
 const GEO_PERMISSION_DENIED_MESSAGES: Record<GeoErrorMessageContext, string> = {
   default: "위치 권한을 허용하면 이 위치에 글을 남길 수 있어요.",
   compose: "위치 권한을 허용하면 글을 남길 수 있어요. 브라우저 설정을 확인해 주세요.",
-  like: "위치 권한을 허용해야 라이크를 남길 수 있어요.",
+  like: "위치 권한을 허용해야 글을 수집할 수 있어요.",
 };
 
 const GEO_TIMEOUT_MS_BY_CONTEXT: Record<GeoRequestContext, number> = {

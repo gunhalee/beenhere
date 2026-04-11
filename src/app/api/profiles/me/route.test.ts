@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GET, POST } from "./route";
+import { GET, PATCH, POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
-import { getMyProfileRepository } from "@/lib/profiles/repository";
+import {
+  createViewerProfile,
+  getViewerProfile,
+  regenerateViewerNickname,
+} from "@/lib/profiles/service";
 
 vi.mock("@/lib/supabase/config", () => ({
   hasSupabaseBrowserConfig: vi.fn(),
@@ -13,9 +17,10 @@ vi.mock("@/lib/supabase/server", () => ({
   getServerUser: vi.fn(),
 }));
 
-vi.mock("@/lib/profiles/repository", () => ({
-  getMyProfileRepository: vi.fn(),
-  regenerateNicknameRepository: vi.fn(),
+vi.mock("@/lib/profiles/service", () => ({
+  createViewerProfile: vi.fn(),
+  getViewerProfile: vi.fn(),
+  regenerateViewerNickname: vi.fn(),
 }));
 
 function makeJsonRequest(body: unknown) {
@@ -79,7 +84,7 @@ describe("GET /api/profiles/me", () => {
   });
 
   it("returns account linking flags for authenticated user", async () => {
-    vi.mocked(getMyProfileRepository).mockResolvedValue({
+    vi.mocked(getViewerProfile).mockResolvedValue({
       id: "user-1",
       nickname: "Tester",
       nicknameChangedAt: null,
@@ -110,7 +115,7 @@ describe("GET /api/profiles/me", () => {
   });
 
   it("returns INTERNAL_ERROR when repository throws", async () => {
-    vi.mocked(getMyProfileRepository).mockRejectedValue(new Error("db read failed"));
+    vi.mocked(getViewerProfile).mockRejectedValue(new Error("db read failed"));
 
     const response = await GET();
     const json = (await response.json()) as { ok: boolean; code?: string };
@@ -146,7 +151,12 @@ describe("POST /api/profiles/me", () => {
   });
 
   it("returns UNAUTHORIZED when user session is missing", async () => {
-    mockSupabasePost({ userId: null });
+    vi.mocked(createViewerProfile).mockResolvedValue({
+      ok: false,
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "로그인이 필요해요.",
+    });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
     const json = (await response.json()) as { ok: boolean; code?: string };
@@ -157,11 +167,11 @@ describe("POST /api/profiles/me", () => {
   });
 
   it("returns PROFILE_ALREADY_EXISTS when insert conflicts on profile id", async () => {
-    mockSupabasePost({
-      insertError: {
-        code: "23505",
-        message: 'duplicate key value violates unique constraint "profiles_pkey"',
-      },
+    vi.mocked(createViewerProfile).mockResolvedValue({
+      ok: false,
+      status: 409,
+      code: "PROFILE_ALREADY_EXISTS",
+      message: "이미 프로필이 존재합니다.",
     });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
@@ -173,11 +183,11 @@ describe("POST /api/profiles/me", () => {
   });
 
   it("returns NICKNAME_TAKEN for nickname unique constraint conflict", async () => {
-    mockSupabasePost({
-      insertError: {
-        code: "23505",
-        message: 'duplicate key value violates unique constraint "profiles_nickname_key"',
-      },
+    vi.mocked(createViewerProfile).mockResolvedValue({
+      ok: false,
+      status: 409,
+      code: "NICKNAME_TAKEN",
+      message: "이미 사용 중인 닉네임입니다.",
     });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
@@ -189,9 +199,11 @@ describe("POST /api/profiles/me", () => {
   });
 
   it("falls back to PROFILE_ALREADY_EXISTS when unique violation is ambiguous", async () => {
-    const { queryBuilder } = mockSupabasePost({
-      existing: { id: "user-1" },
-      insertError: { code: "23505" },
+    vi.mocked(createViewerProfile).mockResolvedValue({
+      ok: false,
+      status: 409,
+      code: "PROFILE_ALREADY_EXISTS",
+      message: "이미 프로필이 존재합니다.",
     });
 
     const response = await POST(makeJsonRequest({ nickname: "tester" }));
@@ -200,11 +212,13 @@ describe("POST /api/profiles/me", () => {
     expect(response.status).toBe(409);
     expect(json.ok).toBe(false);
     expect(json.code).toBe("PROFILE_ALREADY_EXISTS");
-    expect(queryBuilder.maybeSingle).toHaveBeenCalledTimes(1);
   });
 
   it("creates profile and returns display nickname on success", async () => {
-    const { queryBuilder } = mockSupabasePost();
+    vi.mocked(createViewerProfile).mockResolvedValue({
+      ok: true,
+      nickname: "Tester",
+    });
 
     const response = await POST(makeJsonRequest({ nickname: "  tester  " }));
     const json = (await response.json()) as {
@@ -215,9 +229,46 @@ describe("POST /api/profiles/me", () => {
     expect(response.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.data?.nickname).toBe("Tester");
-    expect(queryBuilder.insert).toHaveBeenCalledWith({
+    expect(createViewerProfile).toHaveBeenCalledWith({ nickname: "tester" });
+  });
+});
+
+describe("PATCH /api/profiles/me", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
+  });
+
+  it("uses service layer for nickname regeneration", async () => {
+    vi.mocked(getViewerProfile).mockResolvedValue({
       id: "user-1",
-      nickname: "tester",
+      nickname: "Tester",
+      nicknameChangedAt: null,
+      createdAt: "2026-04-09T00:00:00.000Z",
+      profileCreated: true,
+      isAnonymous: false,
+    });
+    vi.mocked(regenerateViewerNickname).mockResolvedValue({
+      ok: true,
+      nickname: "New Tester",
+      nicknameChangedAt: "2026-04-11T00:00:00.000Z",
+    });
+
+    const response = await PATCH();
+    const json = (await response.json()) as {
+      ok: boolean;
+      data?: { nickname: string; nicknameChangedAt: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({
+      nickname: "New Tester",
+      nicknameChangedAt: "2026-04-11T00:00:00.000Z",
+    });
+    expect(regenerateViewerNickname).toHaveBeenCalledWith({
+      userId: "user-1",
+      nicknameChangedAt: null,
     });
   });
 });

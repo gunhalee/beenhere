@@ -11,7 +11,7 @@ export function LikersList({ loading, items }: Props) {
   if (loading) {
     return (
       <div style={{ padding: "12px 0" }}>
-        <LoadingState label="라이커 목록 불러오는 중" />
+        <LoadingState label="수집한 사람 목록 불러오는 중" />
       </div>
     );
   }
@@ -27,7 +27,7 @@ export function LikersList({ loading, items }: Props) {
           textAlign: "center",
         }}
       >
-        아직 라이크한 사람이 없어요.
+        아직 수집한 사람이 없어요.
       </p>
     );
   }

@@ -68,13 +68,21 @@ export async function deletePostRepository(postId: string): Promise<void> {
 export async function reportPostRepository(input: {
   postId: string;
   reasonCode: string;
-}): Promise<void> {
+}): Promise<{ alreadyReported: boolean }> {
   const supabase = await createSupabaseServerClient();
 
-  const { error } = await supabase.rpc("report_post", {
+  const { data, error } = await supabase.rpc("report_post", {
     p_post_id: input.postId,
     p_reason_code: input.reasonCode,
   });
 
   if (error) throw error;
+  return {
+    alreadyReported: Boolean(
+      data &&
+        typeof data === "object" &&
+        "already_reported" in (data as Record<string, unknown>) &&
+        (data as Record<string, unknown>).already_reported === true,
+    ),
+  };
 }

@@ -1,19 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type TouchEvent } from "react";
-import type { Coordinates } from "@/lib/geo/browser-location";
-import { fetchMyProfileClient } from "@/lib/api/profile-client";
-import { API_ERROR_CODE } from "@/lib/api/common-errors";
-import {
-  getCachedBrowserCoordinates,
-  getCurrentBrowserCoordinates,
-  getGeoErrorMessage,
-} from "@/lib/geo/browser-location";
+import { useCallback, useEffect, useState } from "react";
 import { useFeed } from "@/lib/hooks/use-feed";
-import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
+import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
+import { useFeedCompose } from "@/lib/hooks/use-feed-compose";
+import { useFeedLikerPreview } from "@/lib/hooks/use-feed-liker-preview";
+import { usePullToRefresh } from "@/lib/hooks/use-pull-to-refresh";
 import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
 import type { FeedItem } from "@/types/domain";
+import { InlineBanner } from "@/components/common/inline-banner";
 import { FeedHeader } from "./feed-header";
 import { FeedList } from "./feed-list";
 import { FeedLocationBanner } from "./feed-location-banner";
@@ -26,32 +22,8 @@ type Props = {
   currentNickname?: string | null;
 };
 
-type ComposeState =
-  | { open: false }
-  | { open: true; coords: Coordinates };
-
-const PULL_TO_REFRESH_TRIGGER_PX = 64;
-const PULL_TO_REFRESH_MAX_PX = 92;
-const PULL_TO_REFRESH_DRAG_RATIO = 0.45;
-
 export function FeedScreen({ currentUserId, currentNickname }: Props) {
-  const [resolvedCurrentUserId, setResolvedCurrentUserId] = useState<string | null>(
-    currentUserId ?? null,
-  );
-  const [resolvedCurrentNickname, setResolvedCurrentNickname] = useState<string | null>(
-    currentNickname ?? null,
-  );
-  const [composeState, setComposeState] = useState<ComposeState>({ open: false });
-  const [composeLocating, setComposeLocating] = useState(false);
-  const [composeError, setComposeError] = useState<string | null>(null);
   const [postActionError, setPostActionError] = useState<string | null>(null);
-  const [pullDistance, setPullDistance] = useState(0);
-  const [pullRefreshing, setPullRefreshing] = useState(false);
-
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const pullStartYRef = useRef<number | null>(null);
-  const pullGestureActiveRef = useRef(false);
-  const mountedRef = useMountedRef();
 
   const {
     state,
@@ -64,6 +36,20 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     prependItem,
     requestLocation,
   } = useFeed();
+  const { resolvedCurrentUserId, resolvedCurrentNickname } = useCurrentProfile({
+    currentUserId,
+    currentNickname,
+    onAuthRequired: redirectToLoginWithNext,
+  });
+  const {
+    composeState,
+    composeLocating,
+    composeError,
+    setComposeError,
+    openComposeSheet,
+    closeComposeSheet,
+    handleComposeSuccess: closeComposeAfterSuccess,
+  } = useFeedCompose({ coordsRef });
 
   const {
     reportState,
@@ -85,10 +71,24 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   });
 
   const locationAvailable = !state.locationDenied;
-  const pullOffset = pullRefreshing
-    ? Math.max(pullDistance, PULL_TO_REFRESH_TRIGGER_PX)
-    : pullDistance;
-  const pullReady = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
+  const { previewMap } = useFeedLikerPreview({
+    items: state.items,
+    coordsRef,
+  });
+  const {
+    scrollContainerRef,
+    pullOffset,
+    pullReady,
+    pullRefreshing,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = usePullToRefresh({
+    disabled: state.status === "loading" || state.status === "locating",
+    onRefresh: async () => {
+      await refresh({ silent: true });
+    },
+  });
 
   useEffect(() => {
     const html = document.documentElement;
@@ -109,75 +109,22 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    if (resolvedCurrentUserId && resolvedCurrentNickname) {
-      return;
-    }
-
-    async function resolveCurrentProfile() {
-      const result = await fetchMyProfileClient();
-      if (!mountedRef.current) return;
-
-      if (!result.ok) {
-        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
-          redirectToLoginWithNext();
-        }
-        return;
-      }
-
-      setResolvedCurrentUserId(result.data.id);
-      setResolvedCurrentNickname(result.data.nickname);
-    }
-
-    void resolveCurrentProfile();
-  }, [mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
-
-  const openComposeSheet = useCallback(async () => {
-    if (composeLocating) return;
-
-    setComposeError(null);
-    setPostActionError(null);
-
-    if (coordsRef.current) {
-      setComposeState({ open: true, coords: coordsRef.current });
-      return;
-    }
-
-    const cachedCoords = getCachedBrowserCoordinates();
-    if (cachedCoords) {
-      coordsRef.current = cachedCoords;
-      setComposeState({ open: true, coords: cachedCoords });
-      return;
-    }
-
-    setComposeLocating(true);
-
-    try {
-      const coords = await getCurrentBrowserCoordinates({ context: "compose" });
-      coordsRef.current = coords;
-      setComposeState({ open: true, coords });
-    } catch (err) {
-      setComposeError(getGeoErrorMessage(err, "compose"));
-    } finally {
-      setComposeLocating(false);
-    }
-  }, [composeLocating, coordsRef]);
-
   async function handleComposeClick() {
     if (!resolvedCurrentUserId) {
       redirectToLoginWithNext();
       return;
     }
 
+    setPostActionError(null);
     await openComposeSheet();
   }
 
   function handleDismissCompose() {
-    setComposeState({ open: false });
+    closeComposeSheet();
   }
 
   function handleComposeSuccess(newItem: FeedItem) {
-    setComposeState({ open: false });
+    closeComposeAfterSuccess();
     prependItem(newItem);
   }
 
@@ -204,80 +151,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     [openReport],
   );
 
-  const resetPullGesture = useCallback(() => {
-    pullStartYRef.current = null;
-    pullGestureActiveRef.current = false;
-    if (mountedRef.current) {
-      setPullDistance(0);
-    }
-  }, [mountedRef]);
-
-  const canStartPullToRefresh = useCallback(() => {
-    if (pullRefreshing) return false;
-    if (state.status === "loading" || state.status === "locating") return false;
-    const container = scrollContainerRef.current;
-    if (!container) return false;
-    return container.scrollTop <= 0;
-  }, [pullRefreshing, state.status]);
-
-  const handleTouchStart = useCallback(
-    (event: TouchEvent<HTMLDivElement>) => {
-      if (!canStartPullToRefresh()) {
-        resetPullGesture();
-        return;
-      }
-      pullStartYRef.current = event.touches[0]?.clientY ?? null;
-      pullGestureActiveRef.current = pullStartYRef.current !== null;
-    },
-    [canStartPullToRefresh, resetPullGesture],
-  );
-
-  const handleTouchMove = useCallback(
-    (event: TouchEvent<HTMLDivElement>) => {
-      if (!pullGestureActiveRef.current) return;
-      if (pullStartYRef.current === null) return;
-
-      const currentY = event.touches[0]?.clientY;
-      if (typeof currentY !== "number") return;
-
-      const rawDistance = currentY - pullStartYRef.current;
-      if (rawDistance <= 0) {
-        setPullDistance(0);
-        return;
-      }
-
-      // Prevent browser-level page pull-down while custom feed pull-to-refresh is active.
-      event.preventDefault();
-
-      const easedDistance = Math.min(
-        PULL_TO_REFRESH_MAX_PX,
-        rawDistance * PULL_TO_REFRESH_DRAG_RATIO,
-      );
-      setPullDistance(easedDistance);
-    },
-    [],
-  );
-
-  const handleTouchEnd = useCallback(async () => {
-    if (!pullGestureActiveRef.current) {
-      resetPullGesture();
-      return;
-    }
-
-    const shouldRefresh = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
-    resetPullGesture();
-
-    if (!shouldRefresh || pullRefreshing) {
-      return;
-    }
-
-    setPullRefreshing(true);
-    await refresh({ silent: true });
-    if (mountedRef.current) {
-      setPullRefreshing(false);
-    }
-  }, [mountedRef, pullDistance, pullRefreshing, refresh, resetPullGesture]);
-
   return (
     <div
       style={{
@@ -302,39 +175,11 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       ) : null}
 
       {composeError ? (
-        <div
-          role="alert"
-          style={{
-            background: "#fef2f2",
-            borderBottom: "1px solid #fecaca",
-            color: "#b91c1c",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-            position: "relative",
-            zIndex: 3,
-          }}
-        >
-          {composeError}
-        </div>
+        <InlineBanner message={composeError} tone="error" zIndex={3} />
       ) : null}
 
       {postActionError ? (
-        <div
-          role="alert"
-          style={{
-            background: "#fef2f2",
-            borderBottom: "1px solid #fecaca",
-            color: "#b91c1c",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-            position: "relative",
-            zIndex: 3,
-          }}
-        >
-          {postActionError}
-        </div>
+        <InlineBanner message={postActionError} tone="error" zIndex={3} />
       ) : null}
 
       <div
@@ -381,6 +226,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
           state={state}
           currentUserId={resolvedCurrentUserId}
           locationAvailable={locationAvailable}
+          likerPreviewMap={previewMap}
           onLike={handleLikeClick}
           onDelete={handleDeleteClick}
           onReport={handleOpenReport}

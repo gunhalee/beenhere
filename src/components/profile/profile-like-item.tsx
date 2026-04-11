@@ -99,7 +99,7 @@ export function ProfileLikeItem({
         <div style={{ flex: 1, marginRight: "8px", minWidth: 0 }}>
           {!isSameSharer ? (
             <PostCardMetaRow
-              leadIn="Liked by "
+              leadIn="수집한 사람 "
               nickname={likerNickname}
               profileId={likerId}
               disableProfileLink
@@ -111,7 +111,7 @@ export function ProfileLikeItem({
         </div>
 
         <button
-          aria-label={myLike ? "좋아요 취소" : "좋아요"}
+          aria-label={myLike ? "수집 취소" : "수집"}
           aria-pressed={myLike}
           onClick={() => onLike?.(item)}
           type="button"

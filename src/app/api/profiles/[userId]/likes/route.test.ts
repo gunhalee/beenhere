@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { getProfileLikesRepository } from "@/lib/profiles/repository";
+import { getProfileLikesList } from "@/lib/profiles/service";
 
 vi.mock("@/lib/supabase/config", () => ({
   hasSupabaseBrowserConfig: vi.fn(),
 }));
 
-vi.mock("@/lib/profiles/repository", () => ({
-  getProfileLikesRepository: vi.fn(),
+vi.mock("@/lib/profiles/service", () => ({
+  getProfileLikesList: vi.fn(),
 }));
 
 describe("GET /api/profiles/:userId/likes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
-    vi.mocked(getProfileLikesRepository).mockResolvedValue({
+    vi.mocked(getProfileLikesList).mockResolvedValue({
       items: [],
       nextCursor: null,
     });
@@ -35,8 +35,8 @@ describe("GET /api/profiles/:userId/likes", () => {
 
     expect(response.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(getProfileLikesRepository).toHaveBeenCalledTimes(1);
-    expect(getProfileLikesRepository).toHaveBeenCalledWith({
+    expect(getProfileLikesList).toHaveBeenCalledTimes(1);
+    expect(getProfileLikesList).toHaveBeenCalledWith({
       userId: "guest-1",
       cursor: undefined,
       limit: 20,

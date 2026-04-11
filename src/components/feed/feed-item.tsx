@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { FeedItem } from "@/types/domain";
+import type { FeedItem, FeedLikerPreview } from "@/types/domain";
 import { FeedItemMenu } from "./feed-item-menu";
 import { PostCardMetaRow } from "./post-card-meta-row";
 
@@ -10,6 +10,7 @@ type Props = {
   item: FeedItem;
   currentUserId: string | null;
   locationAvailable: boolean;
+  likerPreview?: FeedLikerPreview[];
   onLike: (item: FeedItem) => void;
   onDelete: (postId: string) => void;
   onReport: (postId: string) => void;
@@ -19,6 +20,7 @@ export function FeedItemCard({
   item,
   currentUserId,
   locationAvailable,
+  likerPreview = [],
   onLike,
   onDelete,
   onReport,
@@ -30,34 +32,14 @@ export function FeedItemCard({
     content,
     authorId,
     authorNickname,
-    lastSharerId,
-    lastSharerNickname,
-    likerUserIds,
-    likerNicknames,
     placeLabel,
     distanceMeters,
     relativeTime,
-    originalPlaceLabel,
-    originalDistanceMeters,
-    originalRelativeTime,
     likeCount,
     myLike,
   } = item;
 
   const isAuthor = currentUserId === authorId;
-  const isSameSharer = lastSharerId === authorId;
-  const authorPlaceLabel = originalPlaceLabel ?? placeLabel;
-  const authorDistanceMeters = originalDistanceMeters ?? distanceMeters;
-  const authorRelativeTime = originalRelativeTime ?? relativeTime;
-  const likerEntries =
-    likerNicknames.length > 0
-      ? likerNicknames.map((nickname, index) => ({
-          nickname,
-          userId: likerUserIds[index] ?? null,
-        }))
-      : !isSameSharer
-        ? [{ nickname: lastSharerNickname, userId: lastSharerId }]
-        : [];
 
   return (
     <article
@@ -90,9 +72,9 @@ export function FeedItemCard({
             <PostCardMetaRow
               nickname={authorNickname}
               profileId={authorId}
-              placeLabel={authorPlaceLabel}
-              distanceMeters={authorDistanceMeters}
-              relativeTime={authorRelativeTime}
+              placeLabel={placeLabel}
+              distanceMeters={distanceMeters}
+              relativeTime={relativeTime}
             />
           </div>
 
@@ -141,7 +123,7 @@ export function FeedItemCard({
           {content}
         </p>
 
-        {/* 하단: Liked by + 라이크 */}
+        {/* 하단: 수집 */}
         <div
           style={{
             alignItems: "center",
@@ -151,7 +133,7 @@ export function FeedItemCard({
           }}
         >
           <div style={{ flex: 1, marginRight: "8px", minWidth: 0 }}>
-            {likerEntries.length > 0 ? (
+            {likerPreview.length > 0 ? (
               <p
                 style={{
                   color: "#6b7280",
@@ -162,9 +144,9 @@ export function FeedItemCard({
                 }}
               >
                 <span style={{ color: "#6b7280", fontWeight: 400 }}>
-                  Liked by{" "}
+                  수집한 사람{" "}
                 </span>
-                {likerEntries.map((liker, index) => (
+                {likerPreview.map((liker, index) => (
                   <span key={`${liker.userId ?? liker.nickname}-${index}`}>
                     {index > 0 ? ", " : null}
                     {liker.userId ? (
@@ -191,14 +173,14 @@ export function FeedItemCard({
           </div>
 
           <button
-            aria-label={myLike ? "라이크 취소" : "라이크"}
+            aria-label={myLike ? "수집 취소" : "수집"}
             aria-pressed={myLike}
             disabled={!locationAvailable && !myLike}
             onClick={() => onLike(item)}
             type="button"
             title={
               !locationAvailable && !myLike
-                ? "위치 권한이 있어야 라이크할 수 있어요"
+                ? "위치 권한이 있어야 수집할 수 있어요"
                 : undefined
             }
             style={{

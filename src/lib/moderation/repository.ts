@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { refreshFeedStateBestEffort } from "@/lib/posts/repository/feed-state";
+import { emitFeedStateChanged, FEED_STATE_CHANGE_REASON } from "@/lib/feed-state/events";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import type { PostStatus } from "@/types/db";
 import type { ModerationReportItem } from "@/types/api";
@@ -123,7 +123,7 @@ export async function hidePostByReportRepository(reportId: string) {
     .eq("id", postId);
 
   if (updateError) throw updateError;
-  void refreshFeedStateBestEffort("moderation_hide_post");
+  void emitFeedStateChanged(FEED_STATE_CHANGE_REASON.POST_HIDDEN);
 
   return { reportId, postId, hidden: true, alreadyHidden: false };
 }

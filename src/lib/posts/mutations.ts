@@ -7,7 +7,7 @@ import {
   unlikePostRepository,
   reportPostRepository,
 } from "./repository/mutations";
-import { refreshFeedStateBestEffort } from "./repository/feed-state";
+import { emitFeedStateChanged, FEED_STATE_CHANGE_REASON } from "@/lib/feed-state/events";
 import { validatePostContent } from "./validators";
 
 // ---------------------------
@@ -42,7 +42,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   }
 
   const result = await createPostRepository(input);
-  void refreshFeedStateBestEffort("create_post");
+  void emitFeedStateChanged(FEED_STATE_CHANGE_REASON.POST_CREATED);
   return { ok: true, postId: result.post_id };
 }
 
@@ -64,9 +64,9 @@ type LikePostResult =
 // Supabase PostgreSQL 예외 코드 → API 에러 코드 매핑
 const LIKE_RPC_ERROR_MAP: Record<string, { code: string; message: string; status: number }> = {
   P0001: { code: API_ERROR_CODE.UNAUTHORIZED,    message: API_ERROR_MESSAGE.AUTH_REQUIRED, status: 401 },
-  P0002: { code: API_ERROR_CODE.ALREADY_LIKED,   message: "이미 라이크한 글이에요.", status: 409 },
+  P0002: { code: API_ERROR_CODE.ALREADY_LIKED,   message: "이미 수집한 글이에요.", status: 409 },
   P0003: { code: API_ERROR_CODE.POST_NOT_FOUND,  message: "글을 찾을 수 없어요.",  status: 404 },
-  "23505": { code: API_ERROR_CODE.ALREADY_LIKED, message: "이미 라이크한 글이에요.", status: 409 },
+  "23505": { code: API_ERROR_CODE.ALREADY_LIKED, message: "이미 수집한 글이에요.", status: 409 },
 };
 
 export async function likePost(input: LikePostInput): Promise<LikePostResult & { status?: number }> {
@@ -76,12 +76,21 @@ export async function likePost(input: LikePostInput): Promise<LikePostResult & {
 
   try {
     const result = await likePostRepository(input);
-    void refreshFeedStateBestEffort("like_post");
+    void emitFeedStateChanged(FEED_STATE_CHANGE_REASON.POST_LIKED);
     return { ok: true, likeCount: Number(result.like_count) };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
     const mapped = LIKE_RPC_ERROR_MAP[code];
-    if (mapped) return { ok: false, ...mapped };
+    if (mapped) {
+      if (mapped.code === API_ERROR_CODE.ALREADY_LIKED) {
+        const currentLikeCount = await readPostLikeCountRepository(input.postId);
+        return {
+          ok: true,
+          likeCount: currentLikeCount,
+        };
+      }
+      return { ok: false, ...mapped };
+    }
     throw err;
   }
 }
@@ -119,7 +128,7 @@ export async function unlikePost(
 
   try {
     const result = await unlikePostRepository(postId);
-    void refreshFeedStateBestEffort("unlike_post");
+    void emitFeedStateChanged(FEED_STATE_CHANGE_REASON.POST_UNLIKED);
     return { ok: true, likeCount: Number(result.like_count) };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
@@ -144,7 +153,7 @@ export async function deletePost(postId: string): Promise<DeletePostResult> {
 
   try {
     await deletePostRepository(postId);
-    void refreshFeedStateBestEffort("delete_post");
+    void emitFeedStateChanged(FEED_STATE_CHANGE_REASON.POST_DELETED);
     return { ok: true };
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
@@ -177,7 +186,7 @@ type ReportPostInput = {
 };
 
 type ReportPostResult =
-  | { ok: true }
+  | { ok: true; alreadyReported: boolean }
   | { ok: false; code: string; message: string };
 
 export async function reportPost(input: ReportPostInput): Promise<ReportPostResult> {
@@ -190,9 +199,22 @@ export async function reportPost(input: ReportPostInput): Promise<ReportPostResu
   }
 
   if (!hasSupabaseBrowserConfig()) {
-    return { ok: true };
+    return { ok: true, alreadyReported: false };
   }
 
-  await reportPostRepository(input);
-  return { ok: true };
+  const result = await reportPostRepository(input);
+  return { ok: true, alreadyReported: result.alreadyReported };
+}
+
+async function readPostLikeCountRepository(postId: string): Promise<number> {
+  const { createSupabaseServerClient } = await import("@/lib/supabase/server");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("posts")
+    .select("like_count")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Number(data?.like_count ?? 0);
 }

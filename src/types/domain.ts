@@ -3,24 +3,23 @@ export type FeedItem = {
   content: string;
   authorId: string;
   authorNickname: string;
-  lastSharerId: string;
-  lastSharerNickname: string;
-  likerUserIds: string[];
-  likerNicknames: string[];
   placeLabel: string;
   distanceMeters: number;
   relativeTime: string;
-  originalPlaceLabel?: string | null;
-  originalDistanceMeters?: number | null;
-  originalRelativeTime?: string;
   likeCount: number;
   myLike: boolean;
+};
+
+export type FeedLikerPreview = {
+  userId: string | null;
+  nickname: string;
 };
 
 export type FeedCursor = {
   distanceMeters: number;
   lastActivityAt: string;
   postId: string;
+  radiusMeters: number;
 };
 
 export type Profile = {

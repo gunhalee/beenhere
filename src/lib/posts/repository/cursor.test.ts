@@ -7,6 +7,7 @@ describe("feed cursor", () => {
       distanceMeters: 123.45,
       lastActivityAt: "2026-04-09T00:00:00.000Z",
       postId: "post-1",
+      radiusMeters: 10000,
     });
 
     const decoded = decodeFeedCursor(encoded);
@@ -14,6 +15,7 @@ describe("feed cursor", () => {
       distanceMeters: 123.45,
       lastActivityAt: "2026-04-09T00:00:00.000Z",
       postId: "post-1",
+      radiusMeters: 10000,
     });
   });
 
@@ -27,6 +29,7 @@ describe("feed cursor", () => {
         distanceMeters: 42,
         lastActivityAt: "not-a-date",
         postId: "post-1",
+        radiusMeters: 10000,
       }),
     ).toString("base64url");
 
@@ -39,6 +42,19 @@ describe("feed cursor", () => {
         distanceMeters: 42,
         lastActivityAt: "2026-04-09T00:00:00.000Z",
         postId: "   ",
+        radiusMeters: 10000,
+      }),
+    ).toString("base64url");
+
+    expect(decodeFeedCursor(encoded)).toBeNull();
+  });
+
+  it("returns null when radiusMeters is missing", () => {
+    const encoded = Buffer.from(
+      JSON.stringify({
+        distanceMeters: 42,
+        lastActivityAt: "2026-04-09T00:00:00.000Z",
+        postId: "post-1",
       }),
     ).toString("base64url");
 

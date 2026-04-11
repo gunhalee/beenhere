@@ -1,32 +1,40 @@
-import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import { createReadRouteHandler, failWithStatus } from "@/lib/api/route-helpers";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { getProfileRepository } from "@/lib/profiles/repository";
+import { getPublicProfile } from "@/lib/profiles/service";
 
 type Context = { params: Promise<{ userId: string }> };
 
-export async function GET(_request: Request, context: Context) {
-  const { userId } = await context.params;
-
-  if (!hasSupabaseBrowserConfig()) {
-    return ok({ id: userId, nickname: formatNicknameForDisplay("샘플_수달") });
-  }
-
-  try {
-    const profile = await getProfileRepository(userId);
-
-    if (!profile) {
-      return fail("존재하지 않는 사용자예요.", 404, API_ERROR_CODE.NOT_FOUND);
+export const GET = createReadRouteHandler<
+  { userId: string },
+  { id: string; nickname: string },
+  Context
+>({
+  parse: async (_request, context) => {
+    const { userId } = await context.params;
+    return { ok: true, parsed: { userId } };
+  },
+  action: async ({ parsed }) => {
+    if (!hasSupabaseBrowserConfig()) {
+      return {
+        ok: true,
+        data: { id: parsed.userId, nickname: formatNicknameForDisplay("샘플_수달") },
+      };
     }
-
-    return ok({ id: profile.id, nickname: profile.nickname });
-  } catch (error) {
-    console.error("[api/profiles/:userId] 조회 실패:", error);
-    return fail(
-      "프로필을 불러오는 중 오류가 발생했어요.",
-      500,
-      API_ERROR_CODE.INTERNAL_ERROR,
-    );
-  }
-}
+    const profile = await getPublicProfile({ userId: parsed.userId });
+    if (!profile) {
+      return {
+        ok: false,
+        status: 404,
+        code: API_ERROR_CODE.NOT_FOUND,
+        message: "존재하지 않는 사용자예요.",
+      };
+    }
+    return { ok: true, data: { id: profile.id, nickname: profile.nickname } };
+  },
+  onError: {
+    logLabel: "[api/profiles/:userId] 조회 실패:",
+    message: "프로필을 불러오는 중 오류가 발생했어요.",
+  },
+});

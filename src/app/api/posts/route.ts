@@ -1,147 +1,58 @@
-import { readJsonBody } from "@/lib/api/request";
-import { fail, ok } from "@/lib/api/response";
-import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
-import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import {
+  createBodyRouteHandler,
+  failFromPreflight,
+  failValidation,
+  failWithStatus,
+} from "@/lib/api/route-helpers";
 import { createPost } from "@/lib/posts/mutations";
-import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
-import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { CreatePostBody } from "@/types/api";
-
-const WRITE_RATE_LIMIT = 10;
-const WRITE_RATE_WINDOW_SECONDS = 60;
-const RATE_LIMIT_CONSENT_KEY = "rate_limit_write_at";
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
 
-function hasRateLimitConsent(userMetadata: unknown) {
-  if (!userMetadata || typeof userMetadata !== "object" || Array.isArray(userMetadata)) {
-    return false;
-  }
-
-  const consents = (userMetadata as { consents?: unknown }).consents;
-  if (!consents || typeof consents !== "object" || Array.isArray(consents)) {
-    return false;
-  }
-
-  return typeof (consents as Record<string, unknown>)[RATE_LIMIT_CONSENT_KEY] === "string";
-}
-
-function calculateRetryAfterSeconds(resetAt: string | null) {
-  if (!resetAt) {
-    return null;
-  }
-
-  const resetTimeMs = Date.parse(resetAt);
-  if (!Number.isFinite(resetTimeMs)) {
-    return null;
-  }
-
-  const seconds = Math.ceil((resetTimeMs - Date.now()) / 1000);
-  return Math.max(seconds, 0);
-}
-
-export async function POST(request: Request) {
-  const bodyResult = await readJsonBody<CreatePostBody>(request);
-
-  if (!bodyResult.ok) return bodyResult.response;
-
-  const { content, latitude, longitude, placeLabel } = bodyResult.body;
-  const clientRequestId = bodyResult.body.clientRequestId?.trim() || undefined;
-
-  if (!content?.trim()) {
-    return fail("내용을 입력해 주세요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
-  }
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
-  }
-
-  if (!placeLabel?.trim()) {
-    return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
-  }
-
-  if (clientRequestId && !CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
-    return fail(
-      "clientRequestId 값이 올바르지 않아요.",
-      400,
-      API_ERROR_CODE.VALIDATION_ERROR,
-    );
-  }
-
-  if (hasSupabaseBrowserConfig()) {
-    try {
-      const supabase = await createSupabaseServerClient();
-      const user = await getServerUser(supabase);
-
-      if (!user) {
-        return fail(
-          API_ERROR_MESSAGE.AUTH_REQUIRED,
-          401,
-          API_ERROR_CODE.UNAUTHORIZED,
-        );
-      }
-
-      const isAnonymous = Boolean(user.is_anonymous);
-
-      void touchProfileActivity({ supabase, userId: user.id, isAnonymous }).catch(
-        (err) => console.warn("[api/posts] touchProfileActivity failed:", err),
-      );
-
-      const quota = await consumeAnonymousWriteQuota({
-        supabase,
-        userId: user.id,
-        isAnonymous,
-      });
-
-      if (!quota.allowed) {
-        const consentRequired =
-          isAnonymous && !hasRateLimitConsent(user.user_metadata);
-
-        return fail(
-          "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
-          429,
-          API_ERROR_CODE.RATE_LIMITED,
-          {
-            resetAt: quota.resetAt,
-            remaining: quota.remaining,
-            retryAfterSeconds: calculateRetryAfterSeconds(quota.resetAt),
-            limit: WRITE_RATE_LIMIT,
-            windowSeconds: WRITE_RATE_WINDOW_SECONDS,
-            consentRequired,
-          },
-        );
-      }
-    } catch (error) {
-      console.error("[api/posts] auth preflight failed:", error);
-      return fail(
-        "요청 검증 중 오류가 발생했어요.",
-        500,
-        API_ERROR_CODE.INTERNAL_ERROR,
-      );
+export const POST = createBodyRouteHandler<
+  CreatePostBody,
+  { postId: string },
+  { params: Promise<Record<string, string>> }
+>({
+  validate: ({ body }) => {
+    const clientRequestId = body.clientRequestId?.trim() || undefined;
+    if (!body.content?.trim()) {
+      return failValidation("내용을 입력해 주세요.");
     }
-  }
-
-  try {
+    if (!Number.isFinite(body.latitude) || !Number.isFinite(body.longitude)) {
+      return failValidation("유효한 위치 좌표가 필요해요.", API_ERROR_CODE.INVALID_LOCATION);
+    }
+    if (!body.placeLabel?.trim()) {
+      return failValidation("장소 정보가 필요해요.");
+    }
+    if (clientRequestId && !CLIENT_REQUEST_ID_PATTERN.test(clientRequestId)) {
+      return failValidation("clientRequestId 값이 올바르지 않아요.");
+    }
+    return null;
+  },
+  getPreflightOptions: () => ({
+      ensureProfile: true,
+      touchActivity: true,
+      requireQuota: true,
+      includeConsentDetails: true,
+    }),
+  action: async ({ body }) => {
+    const clientRequestId = body.clientRequestId?.trim() || undefined;
     const result = await createPost({
-      content,
-      latitude,
-      longitude,
-      placeLabel,
+      content: body.content,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      placeLabel: body.placeLabel,
       clientRequestId,
     });
-
     if (!result.ok) {
-      return fail(result.message, 400, result.code);
+      return { ok: false, message: result.message, code: result.code };
     }
-
-    return ok({ postId: result.postId }, 201);
-  } catch (error) {
-    console.error("[api/posts] 글 작성 실패:", error);
-    return fail(
-      "글을 작성하는 중 오류가 발생했어요.",
-      500,
-      API_ERROR_CODE.INTERNAL_ERROR,
-    );
-  }
-}
+    return { ok: true, data: { postId: result.postId }, status: 201 };
+  },
+  onError: {
+    logLabel: "[api/posts] 글 작성 실패:",
+    message: "글을 작성하는 중 오류가 발생했어요.",
+  },
+});

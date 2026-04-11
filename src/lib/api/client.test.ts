@@ -194,7 +194,7 @@ describe("fetchApi", () => {
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({ ok: true, data: { value: 42 } });
-    expect(getUser).toHaveBeenCalledTimes(2);
+    expect(getUser).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(fetchSpy.mock.calls[0]?.[1]).toEqual(
       expect.objectContaining({

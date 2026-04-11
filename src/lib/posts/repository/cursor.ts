@@ -19,7 +19,10 @@ function isFeedCursor(value: unknown): value is FeedCursor {
     typeof maybe.lastActivityAt === "string" &&
     isValidIsoDateString(maybe.lastActivityAt) &&
     typeof maybe.postId === "string" &&
-    maybe.postId.trim().length > 0
+    maybe.postId.trim().length > 0 &&
+    typeof maybe.radiusMeters === "number" &&
+    Number.isFinite(maybe.radiusMeters) &&
+    maybe.radiusMeters > 0
   );
 }
 

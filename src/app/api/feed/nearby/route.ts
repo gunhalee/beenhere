@@ -4,7 +4,7 @@ import { isApiRouteTimeoutError, runWithTimeout } from "@/lib/api/request";
 import { API_ERROR_CODE, API_TIMEOUT_CODE } from "@/lib/api/common-errors";
 import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 import { decodeFeedCursor } from "@/lib/posts/repository/cursor";
-import { loadNearbyFeedRepository } from "@/lib/posts/repository/feed";
+import { loadNearbyFeedService } from "@/lib/posts/service/feed-read";
 
 const FEED_NEARBY_ROUTE_TIMEOUT_MS = 3000;
 const FEED_STATE_INLINE_TIMEOUT_MS = 1000;
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   try {
     const result = await runWithTimeout(
-      () => loadNearbyFeedRepository({ latitude, longitude, cursor, limit }),
+      () => loadNearbyFeedService({ latitude, longitude, cursor, limit }),
       FEED_NEARBY_ROUTE_TIMEOUT_MS,
       API_TIMEOUT_CODE.TIMEOUT_NEARBY,
       "피드 조회 시간이 초과됐어요.",
@@ -55,7 +55,12 @@ export async function GET(request: Request) {
       }
     }
 
-    return ok({ items: result.items, nextCursor: result.nextCursor, stateVersion });
+    return ok({
+      items: result.items,
+      nextCursor: result.nextCursor,
+      stateVersion,
+      radiusMeters: result.radiusMeters,
+    });
   } catch (error) {
     if (isApiRouteTimeoutError(error)) {
       return fail("피드 조회가 지연되고 있어요.", 504, error.code);

@@ -1,7 +1,8 @@
 "use client";
 
-import type { FeedItem } from "@/types/domain";
+import type { FeedItem, FeedLikerPreview } from "@/types/domain";
 import type { FeedHookState } from "@/lib/hooks/use-feed";
+import { InlineBanner } from "@/components/common/inline-banner";
 import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
 import { FeedItemCard } from "./feed-item";
@@ -11,6 +12,7 @@ type Props = {
   state: FeedHookState;
   currentUserId: string | null;
   locationAvailable: boolean;
+  likerPreviewMap?: Record<string, FeedLikerPreview[]>;
   onLike: (item: FeedItem) => void;
   onDelete: (postId: string) => void;
   onReport: (postId: string) => void;
@@ -23,6 +25,7 @@ export function FeedList({
   state,
   currentUserId,
   locationAvailable,
+  likerPreviewMap = {},
   onLike,
   onDelete,
   onReport,
@@ -53,20 +56,7 @@ export function FeedList({
       }}
     >
       {status === "success" && errorMessage ? (
-        <div
-          role="alert"
-          style={{
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: "14px",
-            color: "#b91c1c",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 12px",
-          }}
-        >
-          {errorMessage}
-        </div>
+        <InlineBanner message={errorMessage} tone="error" rounded padding="10px 12px" />
       ) : null}
 
       {items.map((item) => (
@@ -75,6 +65,7 @@ export function FeedList({
           item={item}
           currentUserId={currentUserId}
           locationAvailable={locationAvailable}
+          likerPreview={likerPreviewMap[item.postId] ?? []}
           onLike={onLike}
           onDelete={onDelete}
           onReport={onReport}

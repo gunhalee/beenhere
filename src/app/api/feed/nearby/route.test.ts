@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
-import { loadNearbyFeedRepository } from "@/lib/posts/repository/feed";
+import { loadNearbyFeedService } from "@/lib/posts/service/feed-read";
 import { readFeedStateCachedRepository } from "@/lib/posts/repository/feed-state";
 import { decodeFeedCursor } from "@/lib/posts/repository/cursor";
 
-vi.mock("@/lib/posts/repository/feed", () => ({
-  loadNearbyFeedRepository: vi.fn(),
+vi.mock("@/lib/posts/service/feed-read", () => ({
+  loadNearbyFeedService: vi.fn(),
 }));
 
 vi.mock("@/lib/posts/repository/feed-state", () => ({
@@ -27,10 +27,12 @@ describe("GET /api/feed/nearby", () => {
       distanceMeters: 123,
       lastActivityAt: "2026-01-01T00:00:00.000Z",
       postId: "p1",
+      radiusMeters: 10000,
     });
-    vi.mocked(loadNearbyFeedRepository).mockResolvedValue({
+    vi.mocked(loadNearbyFeedService).mockResolvedValue({
       items: [],
       nextCursor: null,
+      radiusMeters: 10000,
     });
     vi.mocked(readFeedStateCachedRepository).mockResolvedValue({
       stateVersion: "v1",
@@ -46,7 +48,7 @@ describe("GET /api/feed/nearby", () => {
     expect(response.status).toBe(400);
     expect(json.ok).toBe(false);
     expect(json.code).toBe("INVALID_LOCATION");
-    expect(loadNearbyFeedRepository).not.toHaveBeenCalled();
+    expect(loadNearbyFeedService).not.toHaveBeenCalled();
   });
 
   it("returns 400 when cursor is invalid", async () => {
@@ -60,11 +62,11 @@ describe("GET /api/feed/nearby", () => {
     expect(response.status).toBe(400);
     expect(json.ok).toBe(false);
     expect(json.code).toBe("INVALID_CURSOR");
-    expect(loadNearbyFeedRepository).not.toHaveBeenCalled();
+    expect(loadNearbyFeedService).not.toHaveBeenCalled();
   });
 
   it("returns items + nextCursor + stateVersion on success", async () => {
-    vi.mocked(loadNearbyFeedRepository).mockResolvedValue({
+    vi.mocked(loadNearbyFeedService).mockResolvedValue({
       items: [
         {
           postId: "p1",
@@ -72,6 +74,7 @@ describe("GET /api/feed/nearby", () => {
         },
       ] as never[],
       nextCursor: "cursor-1",
+      radiusMeters: 10000,
     });
 
     const response = await GET(makeRequest("latitude=37.5&longitude=127.0"));
@@ -81,6 +84,7 @@ describe("GET /api/feed/nearby", () => {
         items: Array<{ postId: string }>;
         nextCursor: string | null;
         stateVersion: string | null;
+        radiusMeters?: number;
       };
     };
 
@@ -89,6 +93,7 @@ describe("GET /api/feed/nearby", () => {
     expect(json.data?.items[0]?.postId).toBe("p1");
     expect(json.data?.nextCursor).toBe("cursor-1");
     expect(json.data?.stateVersion).toBe("v1");
+    expect(json.data?.radiusMeters).toBe(10000);
   });
 
   it("skips inline feed-state read on paginated cursor requests", async () => {
@@ -121,7 +126,7 @@ describe("GET /api/feed/nearby", () => {
   });
 
   it("returns 500 when nearby feed query fails", async () => {
-    vi.mocked(loadNearbyFeedRepository).mockRejectedValue(new Error("db down"));
+    vi.mocked(loadNearbyFeedService).mockRejectedValue(new Error("db down"));
 
     const response = await GET(makeRequest("latitude=37.5&longitude=127.0"));
     const json = (await response.json()) as { ok: boolean; code?: string };

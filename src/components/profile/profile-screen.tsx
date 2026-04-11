@@ -7,10 +7,12 @@ import type {
   ProfilePostItem as ProfilePostItemType,
 } from "@/types/domain";
 import type { Coordinates } from "@/lib/geo/browser-location";
-import { useProfile, type ProfileTab } from "@/lib/hooks/use-profile";
+import { useProfile } from "@/lib/hooks/use-profile";
+import type { ProfileTab } from "@/lib/hooks/profile-types";
 import { useProfileContext } from "@/lib/hooks/use-profile-context";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
 import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
+import { InlineBanner } from "@/components/common/inline-banner";
 import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
 import { FeedReportDialog } from "@/components/feed/feed-report-dialog";
@@ -27,7 +29,7 @@ type Props = {
 
 const TAB_LABELS: Record<ProfileTab, string> = {
   posts: "작성한 글",
-  likes: "라이크한 글",
+  likes: "수집한 글",
 };
 
 type ProfileLikeableItem = {
@@ -186,24 +188,14 @@ export function ProfileScreen({ userId }: Props) {
       />
 
       {showGuestProfileBanner ? (
-        <div
-          role="status"
-          style={{
-            background: "#eff6ff",
-            borderBottom: "1px solid #bfdbfe",
-            color: "#1e3a8a",
-            fontSize: "13px",
-            fontWeight: 600,
-            lineHeight: 1.5,
-            padding: "10px 16px",
-            position: "sticky",
-            textAlign: "center",
-            top: "57px",
-            zIndex: 3,
-          }}
-        >
-          Google 로그인 시 기기를 변경해도 데이터는 유지됩니다.
-        </div>
+        <InlineBanner
+          message="Google 로그인 시 기기를 변경해도 데이터는 유지됩니다."
+          tone="info"
+          stickyTop="57px"
+          centered
+          padding="10px 16px"
+          zIndex={3}
+        />
       ) : null}
 
       <div
@@ -242,35 +234,11 @@ export function ProfileScreen({ userId }: Props) {
       </div>
 
       {likeError ? (
-        <div
-          role="alert"
-          style={{
-            background: "#fef2f2",
-            borderBottom: "1px solid #fecaca",
-            color: "#b91c1c",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-          }}
-        >
-          {likeError}
-        </div>
+        <InlineBanner message={likeError} tone="error" />
       ) : null}
 
       {blockActionMessage ? (
-        <div
-          role="status"
-          style={{
-            background: "#ecfdf3",
-            borderBottom: "1px solid #bbf7d0",
-            color: "#166534",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-          }}
-        >
-          {blockActionMessage}
-        </div>
+        <InlineBanner message={blockActionMessage} tone="success" />
       ) : null}
 
       <div style={{ flex: 1, padding: "16px" }}>

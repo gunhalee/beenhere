@@ -138,7 +138,7 @@ export function usePostActions<
           return;
         }
 
-        onActionError?.(result.error ?? "라이크를 처리하지 못했어요. 다시 시도해 주세요.");
+        onActionError?.(result.error ?? "수집을 처리하지 못했어요. 다시 시도해 주세요.");
         return;
       }
 

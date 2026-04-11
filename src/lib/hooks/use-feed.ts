@@ -8,13 +8,13 @@ import {
   type Coordinates,
 } from "@/lib/geo/browser-location";
 import { resolveCoordinatesWithRef } from "@/lib/geo/resolve-coordinates";
-import { fetchFeedState, fetchNearbyFeed } from "@/lib/api/feed-client";
+import { fetchNearbyFeed } from "@/lib/api/feed-client";
 import {
   usePaginatedList,
   type PaginatedFetchResult,
 } from "./use-paginated-list";
 import { useMountedRef } from "./use-mounted-ref";
-import { useVisiblePolling } from "./use-visible-polling";
+import { useFeedPolling } from "./use-feed-polling";
 import {
   getRemovedItemSnapshot,
   removeItemById,
@@ -33,8 +33,6 @@ export type FeedHookState = {
   locationDenied: boolean;
 };
 
-const FEED_VISIBLE_POLL_INTERVAL_MS = 60_000;
-const FEED_VISIBLE_POLL_MAX_INTERVAL_MS = 5 * 60_000;
 const FEED_INITIAL_LOCATION_TIMEOUT_MS = 8_000;
 
 export function useFeed() {
@@ -175,41 +173,13 @@ export function useFeed() {
     void initFeed();
   }, [initFeed]);
 
-  useVisiblePolling({
-    enabled: Boolean(coordsRef.current) && !locationDenied,
-    intervalMs: FEED_VISIBLE_POLL_INTERVAL_MS,
-    maxIntervalMs: FEED_VISIBLE_POLL_MAX_INTERVAL_MS,
-    label: "feed_refresh",
-    runImmediately: false,
-    onTick: async (isCancelled) => {
-      if (isCancelled()) return;
-      if (status === "loading" || status === "locating" || feedListState.loadingMore) {
-        return;
-      }
-
-      const coords = coordsRef.current;
-      if (!coords) return;
-
-      const stateResult = await fetchFeedState();
-      if (!stateResult.ok) return false;
-
-      const latestStateVersion = stateResult.data.stateVersion;
-      const previousStateVersion = feedStateVersionRef.current;
-
-      if (!previousStateVersion) {
-        feedStateVersionRef.current = latestStateVersion;
-        return;
-      }
-
-      if (previousStateVersion === latestStateVersion) {
-        return;
-      }
-
-      const refreshed = await loadFeed(coords, { silent: true });
-      if (!refreshed) return false;
-
-      feedStateVersionRef.current = latestStateVersion;
-    },
+  useFeedPolling({
+    coordsRef,
+    locationDenied,
+    status,
+    loadingMore: feedListState.loadingMore,
+    feedStateVersionRef,
+    refreshFeed: async (coords) => loadFeed(coords, { silent: true }),
   });
 
   const loadMore = useCallback(async () => {

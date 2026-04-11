@@ -99,7 +99,7 @@ export function ProfilePostItem({
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
-          aria-label={isMyProfile ? "좋아요 목록 펼치기" : `좋아요 ${likeCount}개`}
+          aria-label={isMyProfile ? "수집한 사람 목록 펼치기" : `수집 ${likeCount}개`}
           aria-expanded={isLikersExpanded}
           disabled={!isMyProfile}
           onClick={() => isMyProfile && onLikeCountClick(postId)}

@@ -1,135 +1,74 @@
-import { readJsonBody } from "@/lib/api/request";
-import { fail, ok } from "@/lib/api/response";
-import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
-import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
+import { API_ERROR_CODE } from "@/lib/api/common-errors";
+import {
+  createActionRouteHandler,
+  createBodyRouteHandler,
+  failValidation,
+} from "@/lib/api/route-helpers";
 import { likePost, unlikePost } from "@/lib/posts/mutations";
-import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
-import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { LikePostBody } from "@/types/api";
 
 type Context = { params: Promise<{ postId: string }> };
 
-export async function POST(request: Request, context: Context) {
-  const { postId } = await context.params;
-
-  const bodyResult = await readJsonBody<LikePostBody>(request);
-  if (!bodyResult.ok) return bodyResult.response;
-
-  const { latitude, longitude, placeLabel } = bodyResult.body;
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
-  }
-
-  if (!placeLabel?.trim()) {
-    return fail("장소 정보가 필요해요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
-  }
-
-  if (hasSupabaseBrowserConfig()) {
-    try {
-      const supabase = await createSupabaseServerClient();
-      const user = await getServerUser(supabase);
-
-      if (!user) {
-        return fail(
-          API_ERROR_MESSAGE.AUTH_REQUIRED,
-          401,
-          API_ERROR_CODE.UNAUTHORIZED,
-        );
-      }
-
-      const isAnonymous = Boolean(user.is_anonymous);
-
-      void touchProfileActivity({ supabase, userId: user.id, isAnonymous }).catch(
-        (err) => console.warn("[api/posts/:postId/like] touchProfileActivity failed:", err),
-      );
-
-      const quota = await consumeAnonymousWriteQuota({
-        supabase,
-        userId: user.id,
-        isAnonymous,
-      });
-
-      if (!quota.allowed) {
-        return fail(
-          "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
-          429,
-          API_ERROR_CODE.RATE_LIMITED,
-          {
-            resetAt: quota.resetAt,
-            remaining: quota.remaining,
-          },
-        );
-      }
-    } catch (error) {
-      console.error("[api/posts/:postId/like] auth preflight failed:", error);
-      return fail(
-        "요청 검증 중 오류가 발생했어요.",
-        500,
-        API_ERROR_CODE.INTERNAL_ERROR,
-      );
+export const POST = createBodyRouteHandler<
+  LikePostBody,
+  { likeCount: number },
+  Context
+>({
+  validate: ({ body }) => {
+    if (!Number.isFinite(body.latitude) || !Number.isFinite(body.longitude)) {
+      return failValidation("유효한 위치 좌표가 필요해요.", API_ERROR_CODE.INVALID_LOCATION);
     }
-  }
-
-  try {
-    const result = await likePost({ postId, latitude, longitude, placeLabel });
-
+    if (!body.placeLabel?.trim()) {
+      return failValidation("장소 정보가 필요해요.");
+    }
+    return null;
+  },
+  getPreflightOptions: () => ({
+      ensureProfile: true,
+      touchActivity: true,
+      requireQuota: true,
+    }),
+  action: async ({ context, body }) => {
+    const { postId } = await context.params;
+    const result = await likePost({
+      postId,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      placeLabel: body.placeLabel,
+    });
     if (!result.ok) {
-      const status = (result as { status?: number }).status ?? 400;
-      return fail(result.message, status, result.code);
+      return {
+        ok: false,
+        message: result.message,
+        status: (result as { status?: number }).status,
+        code: result.code,
+      };
     }
+    return { ok: true, data: { likeCount: result.likeCount } };
+  },
+  onError: {
+    logLabel: "[api/posts/:postId/like] collect failed:",
+    message: "수집 처리 중 오류가 발생했어요.",
+  },
+});
 
-    return ok({ likeCount: result.likeCount });
-  } catch (error) {
-    console.error("[api/posts/:postId/like] 라이크 실패:", error);
-    return fail(
-      "라이크 처리 중 오류가 발생했어요.",
-      500,
-      API_ERROR_CODE.INTERNAL_ERROR,
-    );
-  }
-}
-
-export async function DELETE(_request: Request, context: Context) {
-  const { postId } = await context.params;
-
-  if (hasSupabaseBrowserConfig()) {
-    try {
-      const supabase = await createSupabaseServerClient();
-      const user = await getServerUser(supabase);
-
-      if (!user) {
-        return fail(
-          API_ERROR_MESSAGE.AUTH_REQUIRED,
-          401,
-          API_ERROR_CODE.UNAUTHORIZED,
-        );
-      }
-    } catch (error) {
-      console.error("[api/posts/:postId/like:DELETE] auth preflight failed:", error);
-      return fail(
-        "요청 검증 중 오류가 발생했어요.",
-        500,
-        API_ERROR_CODE.INTERNAL_ERROR,
-      );
-    }
-  }
-
-  try {
+export const DELETE = createActionRouteHandler<{ likeCount: number }, Context>({
+  getPreflightOptions: () => ({}),
+  action: async ({ context }) => {
+    const { postId } = await context.params;
     const result = await unlikePost(postId);
     if (!result.ok) {
-      const status = (result as { status?: number }).status ?? 400;
-      return fail(result.message, status, result.code);
+      return {
+        ok: false,
+        message: result.message,
+        status: (result as { status?: number }).status,
+        code: result.code,
+      };
     }
-
-    return ok({ likeCount: result.likeCount });
-  } catch (error) {
-    console.error("[api/posts/:postId/like:DELETE] unlike failed:", error);
-    return fail(
-      "라이크 취소 처리 중 오류가 발생했어요.",
-      500,
-      API_ERROR_CODE.INTERNAL_ERROR,
-    );
-  }
-}
+    return { ok: true, data: { likeCount: result.likeCount } };
+  },
+  onError: {
+    logLabel: "[api/posts/:postId/like:DELETE] unlike failed:",
+    message: "수집 취소 처리 중 오류가 발생했어요.",
+  },
+});

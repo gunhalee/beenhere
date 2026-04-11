@@ -1,22 +1,27 @@
 export type PostStatus = "active" | "deleted" | "hidden";
 
-export type NearbyFeedRow = {
+export type NearbyFeedPageRow = {
+  post_id: string;
+  distance_meters: number;
+  last_activity_at: string;
+};
+
+export type FeedPostMetadataRow = {
   post_id: string;
   content: string;
   author_id: string;
   author_nickname: string;
-  last_sharer_id: string;
-  last_sharer_nickname: string;
-  liker_user_ids: string[];
-  liker_nicknames: string[];
   place_label: string;
   distance_meters: number;
-  last_activity_at: string;
-  original_place_label: string | null;
-  original_distance_meters: number | null;
-  original_created_at: string;
+  created_at: string;
   like_count: number;
   my_like: boolean;
+};
+
+export type FeedPostLikersPreviewRow = {
+  post_id: string;
+  liker_user_ids: string[];
+  liker_nicknames: string[];
 };
 
 export type ProfilePostRow = {

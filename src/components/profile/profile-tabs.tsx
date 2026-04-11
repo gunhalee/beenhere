@@ -4,7 +4,7 @@ import type { ProfileLikeItem as ProfileLikeItemType, ProfilePostItem } from "@/
 import type {
   ProfileLikersState,
   ProfileListState,
-} from "@/lib/hooks/use-profile";
+} from "@/lib/hooks/profile-types";
 import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
 import { ProfilePostItem as ProfilePostItemCard } from "./profile-post-item";
@@ -91,10 +91,10 @@ export function ProfileLikesTabContent({
   onReport,
   onLoadMore,
 }: LikesTabProps) {
-  if (state.loading) return <LoadingState label="라이크한 글 불러오는 중" />;
+  if (state.loading) return <LoadingState label="수집한 글 불러오는 중" />;
   if (state.errorMessage) return <ErrorState message={state.errorMessage} />;
   if (state.items.length === 0) {
-    return <ProfileTabEmptyState message="라이크한 글이 없어요." />;
+    return <ProfileTabEmptyState message="수집한 글이 없어요." />;
   }
 
   return (

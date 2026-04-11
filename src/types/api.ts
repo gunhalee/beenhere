@@ -30,6 +30,14 @@ export type CreateBlockBody = {
   blockedUserId: string;
 };
 
+export type FeedLikersPreviewItem = {
+  postId: string;
+  likers: Array<{
+    userId: string | null;
+    nickname: string;
+  }>;
+};
+
 export type ModerationReportItem = {
   reportId: string;
   postId: string;

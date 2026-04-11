@@ -3,6 +3,7 @@ import { POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { createPost } from "@/lib/posts/mutations";
+import { runWritePreflight } from "@/lib/auth/write-preflight";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 
@@ -17,6 +18,10 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/posts/mutations", () => ({
   createPost: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/write-preflight", () => ({
+  runWritePreflight: vi.fn(),
 }));
 
 vi.mock("@/lib/profiles/ensure-profile", () => ({
@@ -39,6 +44,12 @@ describe("POST /api/posts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(false);
+    vi.mocked(runWritePreflight).mockResolvedValue({
+      ok: true,
+      user: { id: "user-1" },
+      isAnonymous: false,
+      supabase: {} as never,
+    });
     vi.mocked(ensureProfileExistsForUser).mockResolvedValue({
       created: false,
       nickname: "Guest",
@@ -69,6 +80,7 @@ describe("POST /api/posts", () => {
   });
 
   it("passes clientRequestId through to domain mutation", async () => {
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
     vi.mocked(createPost).mockResolvedValue({
       ok: true,
       postId: "post-1",
@@ -102,12 +114,12 @@ describe("POST /api/posts", () => {
 
   it("returns 401 when auth is required and user is missing", async () => {
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
-    vi.mocked(createSupabaseServerClient).mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-      },
-    } as never);
-    vi.mocked(getServerUser).mockResolvedValue(null);
+    vi.mocked(runWritePreflight).mockResolvedValue({
+      ok: false,
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "로그인이 필요해요.",
+    });
 
     const response = await POST(
       makeJsonRequest({
@@ -127,25 +139,16 @@ describe("POST /api/posts", () => {
 
   it("returns rate-limit metadata including consent flag for anonymous users", async () => {
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
-    vi.mocked(createSupabaseServerClient).mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: {
-            user: {
-              id: "guest-1",
-              is_anonymous: true,
-              user_metadata: {},
-            },
-          },
-        }),
+    vi.mocked(runWritePreflight).mockResolvedValue({
+      ok: false,
+      status: 429,
+      code: "RATE_LIMITED",
+      message: "게스트 계정의 쓰기 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.",
+      details: {
+        limit: 10,
+        windowSeconds: 60,
+        consentRequired: true,
       },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    } as never);
-    vi.mocked(getServerUser).mockResolvedValue({ id: "guest-1", is_anonymous: true, user_metadata: {} } as any);
-    vi.mocked(consumeAnonymousWriteQuota).mockResolvedValue({
-      allowed: false,
-      remaining: 0,
-      resetAt: new Date(Date.now() + 30_000).toISOString(),
     });
 
     const response = await POST(
@@ -177,22 +180,12 @@ describe("POST /api/posts", () => {
 
   it("returns structured internal error when auth preflight throws", async () => {
     vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
-    vi.mocked(createSupabaseServerClient).mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: {
-            user: {
-              id: "guest-1",
-              is_anonymous: true,
-              user_metadata: {},
-            },
-          },
-        }),
-      },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    } as never);
-    vi.mocked(getServerUser).mockResolvedValue({ id: "guest-1", is_anonymous: true, user_metadata: {} } as any);
-    vi.mocked(ensureProfileExistsForUser).mockRejectedValue(new Error("preflight failed"));
+    vi.mocked(runWritePreflight).mockResolvedValue({
+      ok: false,
+      status: 500,
+      code: "INTERNAL_ERROR",
+      message: "요청 검증 중 오류가 발생했어요.",
+    });
 
     const response = await POST(
       makeJsonRequest({

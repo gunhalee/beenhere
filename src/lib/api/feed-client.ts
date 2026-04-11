@@ -5,8 +5,14 @@
 
 import { fetchApi } from "./client";
 import { API_ERROR_CODE, API_TIMEOUT_CODE } from "./common-errors";
-import type { ApiResult } from "@/types/api";
-import type { FeedItem } from "@/types/domain";
+import { createKeyedValueCache, createSingleValueCache } from "./request-cache";
+import type {
+  ApiResult,
+  CreatePostBody,
+  FeedLikersPreviewItem,
+  LikePostBody,
+} from "@/types/api";
+import type { FeedItem, FeedLikerPreview } from "@/types/domain";
 
 const FEED_STATE_TIMEOUT_MS = 1200;
 const FEED_NEARBY_TIMEOUT_MS = 3000;
@@ -17,16 +23,12 @@ type FeedData = {
   items: FeedItem[];
   nextCursor: string | null;
   stateVersion: string | null;
+  radiusMeters?: number;
 };
 
 type FeedStateData = {
   stateVersion: string;
   refreshedAt: string;
-};
-
-type CachedFeedState = {
-  data: FeedStateData;
-  expiresAt: number;
 };
 
 type NearbyFeedParams = {
@@ -36,12 +38,10 @@ type NearbyFeedParams = {
   limit?: number;
 };
 
-type CreatePostBodyClient = {
-  content: string;
+type FeedLikersPreviewParams = {
   latitude: number;
   longitude: number;
-  placeLabel: string;
-  clientRequestId?: string;
+  postIds: string[];
 };
 
 type RateLimitConsentResponse = {
@@ -49,9 +49,11 @@ type RateLimitConsentResponse = {
   grantedAt: string;
 };
 
-const inFlightNearbyRequests = new Map<string, Promise<ApiResult<FeedData>>>();
-let cachedFeedState: CachedFeedState | null = null;
-let inFlightFeedStateRequest: Promise<ApiResult<FeedStateData>> | null = null;
+const nearbyFeedCache = createKeyedValueCache<FeedData>();
+const feedLikersPreviewCache = createKeyedValueCache<{
+  items: FeedLikersPreviewItem[];
+}>();
+const feedStateCache = createSingleValueCache<FeedStateData>();
 
 function createNearbyRequestKey(params: NearbyFeedParams) {
   const cursor = params.cursor ?? "";
@@ -71,20 +73,18 @@ function createNearbyQuery(params: NearbyFeedParams) {
   return searchParams.toString();
 }
 
-function hasFreshFeedStateCache() {
-  return cachedFeedState != null && cachedFeedState.expiresAt > Date.now();
+function createFeedLikersPreviewKey(params: FeedLikersPreviewParams) {
+  return `${params.latitude}|${params.longitude}|${params.postIds.join(",")}`;
 }
 
-function setFeedStateCache(data: FeedStateData) {
-  cachedFeedState = {
-    data,
-    expiresAt: Date.now() + FEED_STATE_CACHE_TTL_MS,
-  };
-}
+function createFeedLikersPreviewQuery(params: FeedLikersPreviewParams) {
+  const searchParams = new URLSearchParams({
+    latitude: String(params.latitude),
+    longitude: String(params.longitude),
+    postIds: params.postIds.join(","),
+  });
 
-function clearFeedStateCache() {
-  cachedFeedState = null;
-  inFlightFeedStateRequest = null;
+  return searchParams.toString();
 }
 
 function isRetryableWriteResult<T>(result: ApiResult<T>) {
@@ -126,63 +126,51 @@ function generateClientRequestId() {
 
 export async function fetchNearbyFeed(params: NearbyFeedParams) {
   const requestKey = createNearbyRequestKey(params);
-  const inFlight = inFlightNearbyRequests.get(requestKey);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const request = fetchApi<FeedData>(`/api/feed/nearby?${createNearbyQuery(params)}`, {
-    timeoutMs: FEED_NEARBY_TIMEOUT_MS,
-    timeoutErrorMessage: "피드 요청이 지연되고 있어요. 다시 시도해 주세요.",
-    timeoutCode: API_TIMEOUT_CODE.TIMEOUT_NEARBY,
-  }).finally(() => {
-    if (inFlightNearbyRequests.get(requestKey) === request) {
-      inFlightNearbyRequests.delete(requestKey);
-    }
+  return nearbyFeedCache.read(requestKey, {
+    load: () =>
+      fetchApi<FeedData>(`/api/feed/nearby?${createNearbyQuery(params)}`, {
+        timeoutMs: FEED_NEARBY_TIMEOUT_MS,
+        timeoutErrorMessage: "피드 요청이 지연되고 있어요. 다시 시도해 주세요.",
+        timeoutCode: API_TIMEOUT_CODE.TIMEOUT_NEARBY,
+      }),
   });
+}
 
-  inFlightNearbyRequests.set(requestKey, request);
-  return request;
+export async function fetchFeedLikersPreview(params: FeedLikersPreviewParams) {
+  const requestKey = createFeedLikersPreviewKey(params);
+  return feedLikersPreviewCache.read(requestKey, {
+    ttlMs: FEED_STATE_CACHE_TTL_MS,
+    load: () =>
+      fetchApi<{ items: FeedLikersPreviewItem[] }>(
+        `/api/posts/likers-preview?${createFeedLikersPreviewQuery(params)}`,
+        {
+          timeoutMs: FEED_NEARBY_TIMEOUT_MS,
+          timeoutErrorMessage:
+            "수집한 사람 미리보기를 불러오는 중 지연이 발생했어요.",
+          timeoutCode: API_TIMEOUT_CODE.TIMEOUT_NEARBY,
+        },
+      ),
+  });
 }
 
 export async function fetchFeedState(options?: { force?: boolean }) {
-  const force = options?.force ?? false;
-
-  if (!force && hasFreshFeedStateCache() && cachedFeedState) {
-    return { ok: true, data: cachedFeedState.data } as const;
-  }
-
-  if (!force && inFlightFeedStateRequest) {
-    return inFlightFeedStateRequest;
-  }
-
-  const request = fetchApi<FeedStateData>("/api/feed/state", {
-    timeoutMs: FEED_STATE_TIMEOUT_MS,
-    timeoutErrorMessage: "피드 상태 확인이 지연되고 있어요.",
-    timeoutCode: API_TIMEOUT_CODE.TIMEOUT_STATE,
-  })
-    .then((result) => {
-      const isLatest = inFlightFeedStateRequest === request;
-      if (result.ok && isLatest) {
-        setFeedStateCache(result.data);
-      }
-      return result;
-    })
-    .finally(() => {
-      if (inFlightFeedStateRequest === request) {
-        inFlightFeedStateRequest = null;
-      }
-    });
-
-  inFlightFeedStateRequest = request;
-  return request;
+  return feedStateCache.read({
+    force: options?.force,
+    ttlMs: FEED_STATE_CACHE_TTL_MS,
+    load: () =>
+      fetchApi<FeedStateData>("/api/feed/state", {
+        timeoutMs: FEED_STATE_TIMEOUT_MS,
+        timeoutErrorMessage: "피드 상태 확인이 지연되고 있어요.",
+        timeoutCode: API_TIMEOUT_CODE.TIMEOUT_STATE,
+      }),
+  });
 }
 
 // ---------------------------
 // Create post
 // ---------------------------
 
-export async function createPostClient(body: CreatePostBodyClient) {
+export async function createPostClient(body: CreatePostBody) {
   const clientRequestId = body.clientRequestId?.trim() || generateClientRequestId();
 
   return runWithSingleRetry(() =>
@@ -214,14 +202,14 @@ export async function submitRateLimitConsentClient() {
 
 export async function likePostClient(
   postId: string,
-  body: { latitude: number; longitude: number; placeLabel: string },
+  body: LikePostBody,
 ) {
   return runWithSingleRetry(() =>
     fetchApi<{ likeCount: number }>(`/api/posts/${postId}/like`, {
       method: "POST",
       body,
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
-      timeoutErrorMessage: "라이크 요청이 지연되고 있어요. 다시 시도해 주세요.",
+      timeoutErrorMessage: "수집 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_LIKE,
     }),
   );
@@ -232,7 +220,7 @@ export async function unlikePostClient(postId: string) {
     fetchApi<{ likeCount: number }>(`/api/posts/${postId}/like`, {
       method: "DELETE",
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
-      timeoutErrorMessage: "라이크 취소 요청이 지연되고 있어요. 다시 시도해 주세요.",
+      timeoutErrorMessage: "수집 취소 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_UNLIKE,
     }),
   );
@@ -257,7 +245,7 @@ export async function deletePostClient(postId: string) {
 
 export async function reportPostClient(postId: string, reasonCode: string) {
   return runWithSingleRetry(() =>
-    fetchApi<{ postId: string }>(`/api/posts/${postId}/report`, {
+    fetchApi<{ postId: string; alreadyReported: boolean }>(`/api/posts/${postId}/report`, {
       method: "POST",
       body: { reasonCode },
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
@@ -268,6 +256,21 @@ export async function reportPostClient(postId: string, reasonCode: string) {
 }
 
 export function clearFeedClientCache() {
-  clearFeedStateCache();
-  inFlightNearbyRequests.clear();
+  feedStateCache.clear();
+  nearbyFeedCache.clear();
+  feedLikersPreviewCache.clear();
+}
+
+export function mapFeedLikerPreviewByPostId(
+  items: FeedLikersPreviewItem[],
+): Record<string, FeedLikerPreview[]> {
+  return Object.fromEntries(
+    items.map((item) => [
+      item.postId,
+      item.likers.map((liker) => ({
+        userId: liker.userId,
+        nickname: liker.nickname,
+      })),
+    ]),
+  );
 }

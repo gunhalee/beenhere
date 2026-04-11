@@ -4,9 +4,11 @@ import { API_ERROR_CODE, API_TIMEOUT_CODE } from "./common-errors";
 import {
   clearFeedClientCache,
   createPostClient,
+  fetchFeedLikersPreview,
   fetchFeedState,
   fetchNearbyFeed,
   likePostClient,
+  mapFeedLikerPreviewByPostId,
   unlikePostClient,
   reportPostClient,
 } from "./feed-client";
@@ -130,6 +132,35 @@ describe("feed-client read caching and dedupe", () => {
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
     expect(first).toEqual(second);
   });
+
+  it("caches liker preview requests for same query", async () => {
+    vi.mocked(fetchApi).mockResolvedValue({
+      ok: true,
+      data: {
+        items: [
+          {
+            postId: "post-1",
+            likers: [{ userId: "u1", nickname: "Alpha" }],
+          },
+        ],
+      },
+    });
+
+    const first = await fetchFeedLikersPreview({
+      latitude: 37.5,
+      longitude: 127.0,
+      postIds: ["post-1"],
+    });
+    const second = await fetchFeedLikersPreview({
+      latitude: 37.5,
+      longitude: 127.0,
+      postIds: ["post-1"],
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(fetchApi).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("feed-client write retries", () => {
@@ -204,6 +235,24 @@ describe("feed-client write retries", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("treats already-liked response as successful final state", async () => {
+    vi.mocked(fetchApi).mockResolvedValue({
+      ok: true,
+      data: { likeCount: 4 },
+    });
+
+    const result = await likePostClient("post-1", {
+      latitude: 37.5,
+      longitude: 127.0,
+      placeLabel: "Gangnam-gu",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: { likeCount: 4 },
+    });
+  });
+
   it("does not retry report on non-retryable validation error", async () => {
     vi.mocked(fetchApi).mockResolvedValue({
       ok: false,
@@ -240,5 +289,18 @@ describe("feed-client write retries", () => {
       }),
     );
     expect(result.ok).toBe(true);
+  });
+
+  it("maps liker preview items by post id", () => {
+    expect(
+      mapFeedLikerPreviewByPostId([
+        {
+          postId: "post-1",
+          likers: [{ userId: "u1", nickname: "Alpha" }],
+        },
+      ]),
+    ).toEqual({
+      "post-1": [{ userId: "u1", nickname: "Alpha" }],
+    });
   });
 });
