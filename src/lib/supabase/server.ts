@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getSupabaseConfig } from "./config";
 
 /**
@@ -17,8 +17,17 @@ export async function createSupabaseServerClient() {
   }
 
   const cookieStore = await cookies();
+  const headerStore = await headers();
+  const authorizationHeader = headerStore.get("authorization");
 
   return createServerClient(url, anonKey, {
+    global: authorizationHeader
+      ? {
+          headers: {
+            Authorization: authorizationHeader,
+          },
+        }
+      : undefined,
     cookies: {
       getAll() {
         return cookieStore.getAll();

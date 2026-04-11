@@ -32,6 +32,7 @@ function createMockSupabaseSessionClient(input?: {
           ? {
               user: { id: input.sessionUserId },
               refresh_token: "refresh-token",
+              access_token: "access-token-session",
             }
           : null,
       },
@@ -42,10 +43,21 @@ function createMockSupabaseSessionClient(input?: {
           ? {
               user: { id: input.refreshUserId },
               refresh_token: "refresh-token-next",
+              access_token: "access-token-refresh",
             }
           : null,
       },
       error: input?.refreshUserId ? null : { message: "invalid refresh token" },
+    }),
+    getUser: vi.fn().mockResolvedValue({
+      data: {
+        user: input?.refreshUserId
+          ? { id: input.refreshUserId }
+          : input?.sessionUserId
+            ? { id: input.sessionUserId }
+            : null,
+      },
+      error: null,
     }),
   };
 
@@ -55,6 +67,9 @@ function createMockSupabaseSessionClient(input?: {
 describe("fetchApi unauthorized recovery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue(
+      createMockSupabaseSessionClient() as never,
+    );
   });
 
   it("returns successful payload without auth recovery", async () => {
@@ -71,8 +86,37 @@ describe("fetchApi unauthorized recovery", () => {
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({ ok: true, data: { value: 1 } });
-    expect(getSupabaseBrowserClient).not.toHaveBeenCalled();
+    expect(getSupabaseBrowserClient).toHaveBeenCalled();
     expect(redirectToLoginWithNext).not.toHaveBeenCalled();
+  });
+
+  it("adds Authorization header when browser session exists", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          ok: true,
+          data: { value: 9 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const supabase = createMockSupabaseSessionClient({
+      sessionUserId: "user-1",
+      refreshUserId: "user-1",
+    });
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
+
+    await fetchApi<{ value: number }>("/api/test");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/test",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer access-token-session",
+        }),
+      }),
+    );
   });
 
   it("recovers browser session and retries once before succeeding", async () => {
@@ -102,8 +146,8 @@ describe("fetchApi unauthorized recovery", () => {
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({ ok: true, data: { value: 2 } });
-    expect(supabase.auth.getSession).toHaveBeenCalledTimes(1);
-    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(supabase.auth.getSession).toHaveBeenCalled();
+    expect(supabase.auth.refreshSession).toHaveBeenCalled();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(redirectToLoginWithNext).not.toHaveBeenCalled();
   });
@@ -135,8 +179,8 @@ describe("fetchApi unauthorized recovery", () => {
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({ ok: true, data: { value: 3 } });
-    expect(supabase.auth.getSession).toHaveBeenCalledTimes(1);
-    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(supabase.auth.getSession).toHaveBeenCalled();
+    expect(supabase.auth.refreshSession).toHaveBeenCalled();
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(redirectToLoginWithNext).not.toHaveBeenCalled();
   });

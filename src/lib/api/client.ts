@@ -13,6 +13,21 @@ type FetchOptions = {
   timeoutCode?: string;
 };
 
+async function getBrowserAccessToken() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  } catch (error) {
+    console.warn("[api/client] access token read failed:", error);
+    return null;
+  }
+}
+
 async function tryRecoverBrowserSession() {
   if (typeof window === "undefined") return false;
 
@@ -69,9 +84,18 @@ export async function fetchApi<T>(
 
   try {
     const requestOnce = async () => {
+      const accessToken = await getBrowserAccessToken();
+      const headers: Record<string, string> = {};
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
       const response = await fetch(path, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
+        headers: Object.keys(headers).length ? headers : undefined,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
