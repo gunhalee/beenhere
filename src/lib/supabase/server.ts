@@ -1,13 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getSupabaseConfig } from "./config";
 
 /**
  * Server Component / Route Handler 에서 사용하는 Supabase 클라이언트.
- * 쿠키를 통해 사용자 세션을 읽고 갱신한다.
  *
- * 미들웨어가 매 요청마다 쿠키 기반 토큰 갱신을 담당하므로,
- * 이 클라이언트는 별도 Authorization 헤더 없이 쿠키만으로 인증한다.
+ * 인증 경로:
+ * 1차 — 미들웨어가 갱신한 쿠키 (Edge → Serverless 전파가 되면 동작)
+ * 2차 — 클라이언트가 보낸 Authorization 헤더 (global.headers 로 설정)
+ *
+ * global.headers.Authorization 을 설정하면 RLS 의 auth.uid() 가
+ * 해당 토큰의 sub 클레임으로 평가되어 DB 쿼리도 정상 동작한다.
+ * 쿠키가 정상 전파된 경우에도 같은 유저이므로 충돌하지 않는다.
  */
 export async function createSupabaseServerClient() {
   const { url, anonKey } = getSupabaseConfig();
@@ -17,8 +21,13 @@ export async function createSupabaseServerClient() {
   }
 
   const cookieStore = await cookies();
+  const headerStore = await headers();
+  const authorizationHeader = headerStore.get("authorization");
 
   return createServerClient(url, anonKey, {
+    global: authorizationHeader
+      ? { headers: { Authorization: authorizationHeader } }
+      : undefined,
     cookies: {
       getAll() {
         return cookieStore.getAll();
