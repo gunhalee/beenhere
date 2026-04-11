@@ -1,6 +1,7 @@
 import type { ProfilePostRow, ProfileLikeRow, PostLikerRow } from "@/types/db";
 import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
@@ -47,12 +48,40 @@ function isProfileMissingError(error: unknown) {
   return (error as { code?: string }).code === "PGRST116";
 }
 
+function extractBearerToken(rawHeader: string | null) {
+  if (!rawHeader) return null;
+  const [scheme, token] = rawHeader.split(" ", 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== "bearer") return null;
+  const trimmed = token.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * 쿠키 기반 인증을 시도하고, 실패 시 Authorization 헤더의
+ * bearer token 으로 폴백한다.
+ *
+ * 쿠키가 주 경로이지만 Vercel Edge Middleware → Serverless Function
+ * 경계에서 미들웨어가 갱신한 쿠키가 Route Handler 에 전파되지 않는
+ * 경우가 있어 bearer token 폴백이 필요하다.
+ *
+ * 주의: bearer token 은 getUser() 검증에만 사용한다.
+ * Supabase 클라이언트의 global.headers 에는 설정하지 않으므로
+ * RLS 쿼리는 쿠키 기반 auth.uid() 로 동작한다.
+ */
 async function getAuthenticatedUser(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
 ) {
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user;
+  const cookieResult = await supabase.auth.getUser();
+  if (cookieResult.data.user) return cookieResult.data.user;
+
+  const requestHeaders = await headers();
+  const token = extractBearerToken(requestHeaders.get("authorization"));
+  if (!token) return null;
+
+  const bearerResult = await supabase.auth.getUser(token);
+  if (bearerResult.error || !bearerResult.data.user) return null;
+  return bearerResult.data.user;
 }
 
 // ---------------------------

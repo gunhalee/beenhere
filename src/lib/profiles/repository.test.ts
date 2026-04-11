@@ -3,6 +3,7 @@ import { getMyProfileRepository, getProfileLikesRepository } from "./repository"
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
+import { headers } from "next/headers";
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
@@ -16,6 +17,10 @@ vi.mock("@/lib/profiles/ensure-profile", () => ({
   ensureProfileExistsForUser: vi.fn(),
 }));
 
+vi.mock("next/headers", () => ({
+  headers: vi.fn(),
+}));
+
 function createProfileRowQuery(data: unknown, error: unknown = null) {
   return {
     select: vi.fn().mockReturnThis(),
@@ -27,6 +32,9 @@ function createProfileRowQuery(data: unknown, error: unknown = null) {
 describe("profiles repository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(headers).mockResolvedValue({
+      get: vi.fn().mockReturnValue(null),
+    } as never);
   });
 
   it("returns my profile even when touch_profile_activity fails", async () => {
@@ -125,20 +133,48 @@ describe("profiles repository", () => {
     );
   });
 
-  it("returns null when cookie auth user is missing", async () => {
+  it("falls back to bearer token when cookie auth fails", async () => {
+    const profileQuery = createProfileRowQuery({
+      id: "user-bearer",
+      nickname: "token_user",
+      nickname_changed_at: null,
+      created_at: "2026-04-11T00:00:00.000Z",
+    });
+
+    const getUser = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: "invalid cookie session" },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          user: {
+            id: "user-bearer",
+            is_anonymous: false,
+          },
+        },
+        error: null,
+      });
+
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: null },
-          error: { message: "invalid token" },
-        }),
-      },
-      from: vi.fn(),
+      auth: { getUser },
+      from: vi.fn().mockReturnValue(profileQuery),
     } as never);
+    vi.mocked(headers).mockResolvedValue({
+      get: vi.fn().mockReturnValue("Bearer test-access-token"),
+    } as never);
+    vi.mocked(touchProfileActivity).mockResolvedValue(undefined);
 
     const result = await getMyProfileRepository();
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      id: "user-bearer",
+      nickname: "Token User",
+      isAnonymous: false,
+    });
+    expect(getUser).toHaveBeenCalledTimes(2);
+    expect(getUser).toHaveBeenNthCalledWith(2, "test-access-token");
   });
 
   it("maps post metadata separately from like metadata in liked posts", async () => {
