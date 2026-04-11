@@ -56,6 +56,11 @@ function extractBearerToken(raw: string | null) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function shortToken(token: string | null) {
+  if (!token) return "none";
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
+}
+
 /**
  * bearer 토큰 → 쿠키 세션 순서로 인증된 유저를 반환한다.
  *
@@ -74,12 +79,54 @@ export async function getServerUser(supabase: ServerClient) {
 
   if (token) {
     const bearerResult = await supabase.auth.getUser(token);
-    if (bearerResult.data.user) return bearerResult.data.user;
+    if (bearerResult.data.user) {
+      console.info("[auth/server] bearer user ok", {
+        hasBearer: true,
+        token: shortToken(token),
+        userId: bearerResult.data.user.id,
+      });
+      return bearerResult.data.user;
+    }
+    console.warn("[auth/server] bearer user missing", {
+      hasBearer: true,
+      token: shortToken(token),
+      error:
+        bearerResult.error && typeof bearerResult.error === "object"
+          ? {
+              name: "name" in bearerResult.error ? bearerResult.error.name : undefined,
+              message:
+                "message" in bearerResult.error ? bearerResult.error.message : undefined,
+              code: "code" in bearerResult.error ? bearerResult.error.code : undefined,
+              status:
+                "status" in bearerResult.error ? bearerResult.error.status : undefined,
+            }
+          : null,
+    });
     return null;
   }
 
   const cookieResult = await supabase.auth.getUser();
-  if (cookieResult.error || !cookieResult.data.user) return null;
+  if (cookieResult.error || !cookieResult.data.user) {
+    console.warn("[auth/server] cookie user missing", {
+      hasBearer: false,
+      error:
+        cookieResult.error && typeof cookieResult.error === "object"
+          ? {
+              name: "name" in cookieResult.error ? cookieResult.error.name : undefined,
+              message:
+                "message" in cookieResult.error ? cookieResult.error.message : undefined,
+              code: "code" in cookieResult.error ? cookieResult.error.code : undefined,
+              status:
+                "status" in cookieResult.error ? cookieResult.error.status : undefined,
+            }
+          : null,
+    });
+    return null;
+  }
+  console.info("[auth/server] cookie user ok", {
+    hasBearer: false,
+    userId: cookieResult.data.user.id,
+  });
   return cookieResult.data.user;
 }
 

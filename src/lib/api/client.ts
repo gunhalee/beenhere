@@ -21,7 +21,20 @@ async function syncBrowserSession() {
   // with Supabase Auth instead of trusting only locally cached state.
   // This reduces cases where getSession() returns a stale access token
   // that the server rejects immediately.
-  await supabase.auth.getUser();
+  const result = await supabase.auth.getUser();
+  console.info("[auth/client] syncBrowserSession", {
+    hasUser: Boolean(result.data.user),
+    userId: result.data.user?.id ?? null,
+    error:
+      result.error && typeof result.error === "object"
+        ? {
+            name: "name" in result.error ? result.error.name : undefined,
+            message: "message" in result.error ? result.error.message : undefined,
+            code: "code" in result.error ? result.error.code : undefined,
+            status: "status" in result.error ? result.error.status : undefined,
+          }
+        : null,
+  });
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -31,6 +44,14 @@ async function getAccessToken(): Promise<string | null> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
+    console.info("[auth/client] getAccessToken", {
+      hasSession: Boolean(session),
+      userId: session?.user?.id ?? null,
+      expiresAt: session?.expires_at ?? null,
+      tokenPrefix: session?.access_token
+        ? `${session.access_token.slice(0, 8)}...${session.access_token.slice(-6)}`
+        : "none",
+    });
     return session?.access_token ?? null;
   } catch {
     return null;
@@ -91,6 +112,12 @@ export async function fetchApi<T>(
     await syncBrowserSession();
 
     const firstResult = await requestOnce();
+    console.info("[auth/client] fetchApi firstResult", {
+      path,
+      method,
+      ok: firstResult.ok,
+      code: firstResult.ok ? null : firstResult.code ?? null,
+    });
     if (
       !firstResult.ok &&
       firstResult.code === API_ERROR_CODE.UNAUTHORIZED &&
@@ -98,7 +125,14 @@ export async function fetchApi<T>(
     ) {
       try {
         await syncBrowserSession();
-        return await requestOnce();
+        const retryResult = await requestOnce();
+        console.info("[auth/client] fetchApi retryResult", {
+          path,
+          method,
+          ok: retryResult.ok,
+          code: retryResult.ok ? null : retryResult.code ?? null,
+        });
+        return retryResult;
       } catch {
         return firstResult;
       }
