@@ -4,6 +4,7 @@ import { sanitizeNextPath } from "@/lib/auth/google-oauth-common";
 
 const AUTH_LOGIN_PATH = "/auth/login";
 const AUTH_CALLBACK_PATH = "/auth/callback";
+const FORCE_LANDING_PARAM = "forceLanding";
 
 function isApiPath(pathname: string) {
   return pathname.startsWith("/api");
@@ -51,8 +52,9 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const forceLanding = request.nextUrl.searchParams.get(FORCE_LANDING_PARAM) === "1";
 
-  if (pathname === AUTH_LOGIN_PATH && user) {
+  if (pathname === AUTH_LOGIN_PATH && user && !forceLanding) {
     const nextPath = sanitizeNextPath(request.nextUrl.searchParams.get("next"));
     return NextResponse.redirect(new URL(nextPath, request.url));
   }

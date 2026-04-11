@@ -43,7 +43,7 @@ export async function fetchApi<T>(
 
     const json = (await response.json()) as ApiResult<T>;
     if (!json.ok && json.code === API_ERROR_CODE.UNAUTHORIZED) {
-      redirectToLoginWithNext();
+      redirectToLoginWithNext(undefined, { forceLanding: true });
     }
     return json;
   } catch (error) {

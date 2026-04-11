@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getMyProfileRepository, getProfileLikesRepository } from "./repository";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
@@ -9,6 +10,10 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/auth/profile-activity", () => ({
   touchProfileActivity: vi.fn(),
+}));
+
+vi.mock("@/lib/profiles/ensure-profile", () => ({
+  ensureProfileExistsForUser: vi.fn(),
 }));
 
 function createProfileRowQuery(data: unknown, error: unknown = null) {
@@ -59,14 +64,30 @@ describe("profiles repository", () => {
       profileCreated: true,
       isAnonymous: false,
     });
+    expect(ensureProfileExistsForUser).not.toHaveBeenCalled();
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 
-  it("returns null when profile row is missing", async () => {
-    const profileQuery = createProfileRowQuery(null, { code: "PGRST116" });
+  it("auto-creates missing profile row and returns my profile", async () => {
+    const profileQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi
+        .fn()
+        .mockResolvedValueOnce({ data: null, error: { code: "PGRST116" } })
+        .mockResolvedValueOnce({
+          data: {
+            id: "user-2",
+            nickname: "guest_user",
+            nickname_changed_at: null,
+            created_at: "2026-04-11T00:00:00.000Z",
+          },
+          error: null,
+        }),
+    };
 
     vi.mocked(createSupabaseServerClient).mockResolvedValue({
       auth: {
@@ -84,10 +105,24 @@ describe("profiles repository", () => {
       from: vi.fn().mockReturnValue(profileQuery),
     } as never);
     vi.mocked(touchProfileActivity).mockResolvedValue(undefined);
+    vi.mocked(ensureProfileExistsForUser).mockResolvedValue({
+      created: true,
+      nickname: "Guest_User",
+    });
 
     const result = await getMyProfileRepository();
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      id: "user-2",
+      nickname: "Guest User",
+      profileCreated: true,
+      isAnonymous: true,
+    });
+    expect(ensureProfileExistsForUser).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-2",
+      true,
+    );
   });
 
   it("maps post metadata separately from like metadata in liked posts", async () => {

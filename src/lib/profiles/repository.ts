@@ -3,6 +3,7 @@ import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerIte
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
+import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { formatRelativeTime } from "@/lib/utils/datetime";
 import { encodeCursor, decodeCursor } from "@/lib/utils/cursor";
@@ -40,6 +41,12 @@ function touchProfileActivityInBackground(input: {
   });
 }
 
+function isProfileMissingError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  if (!("code" in error)) return false;
+  return (error as { code?: string }).code === "PGRST116";
+}
+
 // ---------------------------
 // 프로필 조회
 // ---------------------------
@@ -74,20 +81,41 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
   if (!user) return null;
 
   const isAnonymous = Boolean(user.is_anonymous);
+  const readMyProfile = () =>
+    supabase
+      .from("profiles")
+      .select("id, nickname, nickname_changed_at, created_at")
+      .eq("id", user.id)
+      .single();
+
+  let { data, error } = await readMyProfile();
+
+  if (!data) {
+    if (error && !isProfileMissingError(error)) {
+      return null;
+    }
+
+    try {
+      await ensureProfileExistsForUser(supabase, user.id, isAnonymous);
+    } catch (ensureError) {
+      console.warn(
+        "[profiles/repository] failed to ensure missing profile row:",
+        ensureError,
+      );
+      return null;
+    }
+
+    const retry = await readMyProfile();
+    data = retry.data;
+    error = retry.error;
+    if (error || !data) return null;
+  }
 
   touchProfileActivityInBackground({
     supabase,
     userId: user.id,
     isAnonymous,
   });
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, nickname, nickname_changed_at, created_at")
-    .eq("id", user.id)
-    .single();
-
-  if (error || !data) return null;
 
   return {
     id: data.id as string,

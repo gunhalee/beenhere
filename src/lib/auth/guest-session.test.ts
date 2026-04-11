@@ -23,10 +23,25 @@ function createMockSupabase() {
   };
 }
 
+function mockProfileBootstrap(input?: { ok?: boolean; error?: string }) {
+  const payload =
+    input?.ok === false
+      ? { ok: false, error: input.error ?? "bootstrap failed" }
+      : { ok: true, data: { id: "user-1", nickname: "tester" } };
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue(payload),
+    }),
+  );
+}
+
 describe("ensureGuestSession guest activity touch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
+    mockProfileBootstrap();
   });
 
   it("touches guest activity when current anonymous session exists", async () => {
@@ -46,6 +61,8 @@ describe("ensureGuestSession guest activity touch", () => {
     const result = await ensureGuestSession();
 
     expect(result).toEqual({ ok: true, userId: "guest-current", restored: false });
+    expect(clearMyProfileCache).toHaveBeenCalledTimes(1);
+    expect(clearProfileCache).toHaveBeenCalledTimes(1);
     expect(supabase.rpc).toHaveBeenCalledWith("touch_profile_activity", {
       p_user_id: "guest-current",
       p_is_anonymous: true,
@@ -110,9 +127,40 @@ describe("ensureGuestSession guest activity touch", () => {
     const result = await ensureGuestSession();
 
     expect(result).toEqual({ ok: true, userId: "guest-new", restored: false });
+    expect(clearMyProfileCache).toHaveBeenCalledTimes(1);
+    expect(clearProfileCache).toHaveBeenCalledTimes(1);
     expect(supabase.rpc).toHaveBeenCalledWith("touch_profile_activity", {
       p_user_id: "guest-new",
       p_is_anonymous: true,
     });
+  });
+
+  it("fails when profile bootstrap does not return ok", async () => {
+    const supabase = createMockSupabase();
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: null },
+    });
+    supabase.auth.refreshSession.mockResolvedValue({
+      error: { message: "invalid refresh token" },
+      data: { session: null },
+    });
+    supabase.auth.signInAnonymously.mockResolvedValue({
+      error: null,
+      data: {
+        session: {
+          refresh_token: "refresh-token-new",
+          user: { id: "guest-new", is_anonymous: true },
+        },
+      },
+    });
+    supabase.rpc.mockResolvedValue({ error: null });
+    mockProfileBootstrap({ ok: false, error: "profile missing" });
+
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
+
+    const result = await ensureGuestSession();
+
+    expect(result).toEqual({ ok: false, error: "profile missing" });
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 });

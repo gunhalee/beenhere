@@ -10,6 +10,14 @@ type EnsureGuestSessionResult =
   | { ok: true; userId: string; restored: boolean }
   | { ok: false; error: string };
 
+type SessionLike = {
+  refresh_token?: string | null;
+  user: {
+    id: string;
+    is_anonymous?: boolean;
+  };
+};
+
 type EnsureGuestSessionWithRetryOptions = {
   maxAttempts?: number;
   initialDelayMs?: number;
@@ -43,6 +51,74 @@ async function touchGuestLastActive(
   }
 
   console.warn("[guest-session] failed to touch guest last_active_at", error);
+}
+
+async function ensureProfileBootstrap() {
+  try {
+    const response = await fetch("/api/profiles/me", {
+      method: "GET",
+      cache: "no-store",
+    });
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: string;
+    };
+
+    if (payload?.ok) {
+      return { ok: true } as const;
+    }
+
+    return {
+      ok: false,
+      error:
+        payload?.error ??
+        "Guest profile is not ready yet. Please try again.",
+    } as const;
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Guest profile setup failed. Please try again.",
+    } as const;
+  }
+}
+
+async function finalizeSession(input: {
+  supabase: ReturnType<typeof getSupabaseBrowserClient>;
+  session: SessionLike;
+  restored: boolean;
+}) {
+  const isAnonymous = Boolean(input.session.user.is_anonymous);
+  if (isAnonymous && input.session.refresh_token) {
+    saveGuestSession({
+      refreshToken: input.session.refresh_token,
+      userId: input.session.user.id,
+    });
+  }
+
+  clearMyProfileCache();
+  clearProfileCache();
+
+  const profileBootstrap = await ensureProfileBootstrap();
+  if (!profileBootstrap.ok) {
+    return {
+      ok: false,
+      error: profileBootstrap.error,
+    } as const;
+  }
+
+  await touchGuestLastActive(input.supabase, {
+    userId: input.session.user.id,
+    isAnonymous,
+  });
+
+  return {
+    ok: true,
+    userId: input.session.user.id,
+    restored: input.restored,
+  } as const;
 }
 
 function canUseLocalStorage() {
@@ -117,17 +193,11 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
   } = await supabase.auth.getSession();
 
   if (currentSession?.user) {
-    if (currentSession.refresh_token && currentSession.user.is_anonymous) {
-      saveGuestSession({
-        refreshToken: currentSession.refresh_token,
-        userId: currentSession.user.id,
-      });
-    }
-    await touchGuestLastActive(supabase, {
-      userId: currentSession.user.id,
-      isAnonymous: Boolean(currentSession.user.is_anonymous),
+    return finalizeSession({
+      supabase,
+      session: currentSession,
+      restored: false,
     });
-    return { ok: true, userId: currentSession.user.id, restored: false };
   }
 
   const storedRefreshToken = readGuestRefreshToken();
@@ -137,18 +207,11 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
     });
 
     if (!restored.error && restored.data.session?.user) {
-      const restoredSession = restored.data.session;
-      saveGuestSession({
-        refreshToken: restoredSession.refresh_token,
-        userId: restoredSession.user.id,
+      return finalizeSession({
+        supabase,
+        session: restored.data.session,
+        restored: true,
       });
-      clearMyProfileCache();
-      clearProfileCache();
-      await touchGuestLastActive(supabase, {
-        userId: restoredSession.user.id,
-        isAnonymous: Boolean(restoredSession.user.is_anonymous),
-      });
-      return { ok: true, userId: restoredSession.user.id, restored: true };
     }
   }
 
@@ -167,18 +230,11 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
     };
   }
 
-  saveGuestSession({
-    refreshToken: created.data.session.refresh_token,
-    userId: created.data.session.user.id,
+  return finalizeSession({
+    supabase,
+    session: created.data.session,
+    restored: false,
   });
-  clearMyProfileCache();
-  clearProfileCache();
-  await touchGuestLastActive(supabase, {
-    userId: created.data.session.user.id,
-    isAnonymous: Boolean(created.data.session.user.is_anonymous),
-  });
-
-  return { ok: true, userId: created.data.session.user.id, restored: false };
 }
 
 async function ensureGuestSessionWithRetry(
