@@ -22,15 +22,24 @@ async function tryRecoverBrowserSession() {
       data: { session },
     } = await supabase.auth.getSession();
 
-    if (!session?.user || !session.refresh_token) {
-      return Boolean(session?.user);
+    if (session?.refresh_token) {
+      const refreshedWithToken = await supabase.auth.refreshSession({
+        refresh_token: session.refresh_token,
+      });
+      if (refreshedWithToken.data.session?.user) {
+        return true;
+      }
     }
 
-    const refreshed = await supabase.auth.refreshSession({
-      refresh_token: session.refresh_token,
-    });
+    const refreshed = await supabase.auth.refreshSession();
+    if (refreshed.data.session?.user) {
+      return true;
+    }
 
-    return Boolean(refreshed.data.session?.user);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return Boolean(user ?? session?.user);
   } catch (error) {
     console.warn("[api/client] session recovery failed:", error);
     return false;

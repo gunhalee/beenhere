@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   clearMyProfileCache,
   clearProfileCache,
+  fetchMyProfileClient,
   regenNicknameClient,
   updateMyProfileCacheNickname,
 } from "@/lib/api/profile-client";
@@ -54,24 +55,60 @@ export function ProfileHeader({
     setRegenError(null);
 
     const result = await regenNicknameClient();
-    setRegenLoading(false);
 
     if (!result.ok) {
       if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+        const syncedProfile = await fetchMyProfileClient({ force: true });
+        if (syncedProfile.ok) {
+          const retryResult = await regenNicknameClient();
+          setRegenLoading(false);
+
+          if (retryResult.ok) {
+            updateMyProfileCacheNickname({
+              nickname: retryResult.data.nickname,
+              nicknameChangedAt: retryResult.data.nicknameChangedAt,
+            });
+            onNicknameChange?.(
+              retryResult.data.nickname,
+              retryResult.data.nicknameChangedAt,
+            );
+            return;
+          }
+
+          if (retryResult.code !== API_ERROR_CODE.UNAUTHORIZED) {
+            const retryDaysRemaining = readDaysRemaining(retryResult.details);
+            if (
+              retryResult.code === API_ERROR_CODE.COOLDOWN_ACTIVE &&
+              retryDaysRemaining !== null
+            ) {
+              setRegenError(`프로필 이름은 ${retryDaysRemaining}일 후 변경할 수 있어요.`);
+              return;
+            }
+
+            setRegenError(retryResult.error ?? "프로필 이름을 변경하지 못했어요.");
+            return;
+          }
+        }
+
+        setRegenLoading(false);
+        setRegenError("세션 확인이 필요해요. 다시 로그인해 주세요.");
         onAuthRequired?.();
         return;
       }
 
       const daysRemaining = readDaysRemaining(result.details);
       if (result.code === API_ERROR_CODE.COOLDOWN_ACTIVE && daysRemaining !== null) {
+        setRegenLoading(false);
         setRegenError(`프로필 이름은 ${daysRemaining}일 후 변경할 수 있어요.`);
         return;
       }
 
+      setRegenLoading(false);
       setRegenError(result.error ?? "프로필 이름을 변경하지 못했어요.");
       return;
     }
 
+    setRegenLoading(false);
     updateMyProfileCacheNickname({
       nickname: result.data.nickname,
       nicknameChangedAt: result.data.nicknameChangedAt,

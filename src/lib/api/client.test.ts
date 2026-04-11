@@ -108,6 +108,39 @@ describe("fetchApi unauthorized recovery", () => {
     expect(redirectToLoginWithNext).not.toHaveBeenCalled();
   });
 
+  it("recovers even when getSession is null but refreshSession restores user", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          ok: false,
+          error: "unauthorized",
+          code: "UNAUTHORIZED",
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          ok: true,
+          data: { value: 3 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const supabase = createMockSupabaseSessionClient({
+      sessionUserId: null,
+      refreshUserId: "user-1",
+    });
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
+
+    const result = await fetchApi<{ value: number }>("/api/test");
+
+    expect(result).toEqual({ ok: true, data: { value: 3 } });
+    expect(supabase.auth.getSession).toHaveBeenCalledTimes(1);
+    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(redirectToLoginWithNext).not.toHaveBeenCalled();
+  });
+
   it("redirects to forced landing when session recovery fails", async () => {
     const fetchSpy = vi
       .fn()
