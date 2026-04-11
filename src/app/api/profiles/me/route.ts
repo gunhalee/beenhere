@@ -46,18 +46,27 @@ export async function GET() {
     });
   }
 
-  const profile = await getMyProfileRepository();
-  if (!profile) {
-    return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
-  }
+  try {
+    const profile = await getMyProfileRepository();
+    if (!profile) {
+      return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
+    }
 
-  return ok({
-    id: profile.id,
-    nickname: profile.nickname,
-    nicknameChangedAt: profile.nicknameChangedAt,
-    profileCreated: profile.profileCreated,
-    isAnonymous: profile.isAnonymous,
-  });
+    return ok({
+      id: profile.id,
+      nickname: profile.nickname,
+      nicknameChangedAt: profile.nicknameChangedAt,
+      profileCreated: profile.profileCreated,
+      isAnonymous: profile.isAnonymous,
+    });
+  } catch (error) {
+    console.error("[api/profiles/me][GET] failed:", error);
+    return fail(
+      "프로필 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
+  }
 }
 
 export async function PATCH() {
@@ -68,28 +77,37 @@ export async function PATCH() {
     });
   }
 
-  const profile = await getMyProfileRepository();
-  if (!profile) {
-    return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
+  try {
+    const profile = await getMyProfileRepository();
+    if (!profile) {
+      return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
+    }
+
+    const result = await regenerateNicknameRepository(
+      profile.id,
+      profile.nicknameChangedAt,
+    );
+
+    if (!result.ok) {
+      const details =
+        "daysRemaining" in result && typeof result.daysRemaining === "number"
+          ? { daysRemaining: result.daysRemaining }
+          : undefined;
+      return fail(result.message, 429, result.code, details);
+    }
+
+    return ok({
+      nickname: result.nickname,
+      nicknameChangedAt: result.nicknameChangedAt,
+    });
+  } catch (error) {
+    console.error("[api/profiles/me][PATCH] failed:", error);
+    return fail(
+      "프로필 이름 변경 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.",
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
   }
-
-  const result = await regenerateNicknameRepository(
-    profile.id,
-    profile.nicknameChangedAt,
-  );
-
-  if (!result.ok) {
-    const details =
-      "daysRemaining" in result && typeof result.daysRemaining === "number"
-        ? { daysRemaining: result.daysRemaining }
-        : undefined;
-    return fail(result.message, 429, result.code, details);
-  }
-
-  return ok({
-    nickname: result.nickname,
-    nicknameChangedAt: result.nicknameChangedAt,
-  });
 }
 
 export async function POST(request: Request) {

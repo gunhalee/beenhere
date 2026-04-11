@@ -1,6 +1,7 @@
 import type { ApiResult } from "@/types/api";
 import { API_ERROR_CODE } from "./common-errors";
 import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -11,6 +12,30 @@ type FetchOptions = {
   timeoutErrorMessage?: string;
   timeoutCode?: string;
 };
+
+async function tryRecoverBrowserSession() {
+  if (typeof window === "undefined") return false;
+
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user || !session.refresh_token) {
+      return Boolean(session?.user);
+    }
+
+    const refreshed = await supabase.auth.refreshSession({
+      refresh_token: session.refresh_token,
+    });
+
+    return Boolean(refreshed.data.session?.user);
+  } catch (error) {
+    console.warn("[api/client] session recovery failed:", error);
+    return false;
+  }
+}
 
 /**
  * 클라이언트 사이드 API 호출 헬퍼.
@@ -34,18 +59,40 @@ export async function fetchApi<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(path, {
-      method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
+    const requestOnce = async () => {
+      const response = await fetch(path, {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+      return (await response.json()) as ApiResult<T>;
+    };
 
-    const json = (await response.json()) as ApiResult<T>;
-    if (!json.ok && json.code === API_ERROR_CODE.UNAUTHORIZED) {
+    const firstResult = await requestOnce();
+
+    if (
+      !firstResult.ok &&
+      firstResult.code === API_ERROR_CODE.UNAUTHORIZED
+    ) {
+      const recovered = await tryRecoverBrowserSession();
+      if (recovered) {
+        const retryResult = await requestOnce();
+        if (
+          retryResult.ok ||
+          retryResult.code !== API_ERROR_CODE.UNAUTHORIZED
+        ) {
+          return retryResult;
+        }
+
+        redirectToLoginWithNext(undefined, { forceLanding: true });
+        return retryResult;
+      }
+
       redirectToLoginWithNext(undefined, { forceLanding: true });
     }
-    return json;
+
+    return firstResult;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: timeoutErrorMessage, code: timeoutCode };

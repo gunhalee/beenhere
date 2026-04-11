@@ -92,7 +92,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 
   if (!data) {
     if (error && !isProfileMissingError(error)) {
-      return null;
+      throw error;
     }
 
     try {
@@ -108,7 +108,9 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
     const retry = await readMyProfile();
     data = retry.data;
     error = retry.error;
-    if (error || !data) return null;
+    if (error || !data) {
+      throw error ?? new Error("Failed to read ensured profile row.");
+    }
   }
 
   touchProfileActivityInBackground({

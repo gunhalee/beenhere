@@ -98,6 +98,17 @@ describe("GET /api/profiles/me", () => {
       isAnonymous: true,
     });
   });
+
+  it("returns INTERNAL_ERROR when repository throws", async () => {
+    vi.mocked(getMyProfileRepository).mockRejectedValue(new Error("db read failed"));
+
+    const response = await GET();
+    const json = (await response.json()) as { ok: boolean; code?: string };
+
+    expect(response.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.code).toBe("INTERNAL_ERROR");
+  });
 });
 
 describe("POST /api/profiles/me", () => {
