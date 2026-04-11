@@ -57,6 +57,59 @@ function mockCallbackSupabase(options: MockCallbackOptions = {}) {
   return supabase;
 }
 
+function mockCallbackSupabaseWithMultipleSetAll() {
+  vi.mocked(createServerClient).mockImplementation(
+    (_url: string, _anonKey: string, options?: unknown) => {
+      const setAll =
+        options &&
+        typeof options === "object" &&
+        "cookies" in options &&
+        options.cookies &&
+        typeof options.cookies === "object" &&
+        "setAll" in options.cookies &&
+        typeof options.cookies.setAll === "function"
+          ? options.cookies.setAll
+          : null;
+
+      const exchangeCodeForSession = vi.fn().mockImplementation(async () => {
+        setAll?.([
+          {
+            name: "sb-test-auth-token.0",
+            value: "chunk-0",
+            options: { path: "/" },
+          },
+        ]);
+        setAll?.([
+          {
+            name: "sb-test-auth-token.1",
+            value: "chunk-1",
+            options: { path: "/" },
+          },
+          {
+            name: "sb-test-auth-token-code-verifier",
+            value: "",
+            options: { path: "/", maxAge: 0 },
+          },
+        ]);
+        return { error: null };
+      });
+
+      const getUser = vi.fn().mockResolvedValue({
+        data: {
+          user: {
+            id: "member-1",
+            is_anonymous: false,
+          },
+        },
+      });
+
+      return {
+        auth: { exchangeCodeForSession, getUser },
+      } as never;
+    },
+  );
+}
+
 describe("GET /auth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -148,5 +201,21 @@ describe("GET /auth/callback", () => {
       "member-1",
       true,
     );
+  });
+
+  it("preserves all auth cookie chunks across multiple setAll calls", async () => {
+    mockCallbackSupabaseWithMultipleSetAll();
+
+    const request = new Request(
+      "http://localhost/auth/callback?code=abc123&next=%2Fprofile%2Fmember-1",
+    );
+
+    const response = await GET(request);
+    const setCookieHeader = response.headers.get("set-cookie") ?? "";
+
+    expect(response.status).toBe(307);
+    expect(setCookieHeader).toContain("sb-test-auth-token.0=chunk-0");
+    expect(setCookieHeader).toContain("sb-test-auth-token.1=chunk-1");
+    expect(setCookieHeader).toContain("sb-test-auth-token-code-verifier=");
   });
 });

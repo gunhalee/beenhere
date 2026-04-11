@@ -11,8 +11,11 @@ type PendingCookie = {
   options: Record<string, unknown>;
 };
 
-function applyCookies(response: NextResponse, pendingCookies: PendingCookie[]) {
-  for (const { name, value, options } of pendingCookies) {
+function applyCookies(
+  response: NextResponse,
+  pendingCookies: Map<string, PendingCookie>,
+) {
+  for (const { name, value, options } of pendingCookies.values()) {
     response.cookies.set(name, value, options);
   }
   return response;
@@ -33,7 +36,7 @@ export async function GET(request: Request) {
 
   const { url, anonKey } = getSupabaseConfig();
   const cookieStore = await cookies();
-  const pendingCookies: PendingCookie[] = [];
+  const pendingCookies = new Map<string, PendingCookie>();
 
   const supabase = createServerClient(url!, anonKey!, {
     cookies: {
@@ -41,9 +44,8 @@ export async function GET(request: Request) {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        pendingCookies.length = 0;
-        pendingCookies.push(...cookiesToSet);
         cookiesToSet.forEach(({ name, value, options }) => {
+          pendingCookies.set(name, { name, value, options });
           try {
             cookieStore.set(name, value, options);
           } catch {
