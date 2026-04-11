@@ -1,6 +1,7 @@
 import type { ProfilePostRow, ProfileLikeRow, PostLikerRow } from "@/types/db";
 import type { MyProfile, Profile, ProfileLikeItem, ProfilePostItem, PostLikerItem } from "@/types/domain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
@@ -47,6 +48,39 @@ function isProfileMissingError(error: unknown) {
   return (error as { code?: string }).code === "PGRST116";
 }
 
+function extractBearerToken(rawHeader: string | null) {
+  if (!rawHeader) return null;
+  const [scheme, token] = rawHeader.split(" ", 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== "bearer") return null;
+  const trimmed = token.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function getAuthenticatedUser(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+) {
+  const initialUserResult = await supabase.auth.getUser();
+  if (initialUserResult.data.user) {
+    return initialUserResult.data.user;
+  }
+
+  const requestHeaders = await headers();
+  const accessToken = extractBearerToken(
+    requestHeaders.get("authorization"),
+  );
+  if (!accessToken) {
+    return null;
+  }
+
+  const bearerUserResult = await supabase.auth.getUser(accessToken);
+  if (bearerUserResult.error || !bearerUserResult.data.user) {
+    return null;
+  }
+
+  return bearerUserResult.data.user;
+}
+
 // ---------------------------
 // 프로필 조회
 // ---------------------------
@@ -73,10 +107,7 @@ export async function getProfileRepository(
 
 export async function getMyProfileRepository(): Promise<MyProfile | null> {
   const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser(supabase);
 
   if (!user) return null;
 

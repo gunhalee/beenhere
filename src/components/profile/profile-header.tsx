@@ -88,11 +88,22 @@ export function ProfileHeader({
             setRegenError(retryResult.error ?? "프로필 이름을 변경하지 못했어요.");
             return;
           }
+
+          setRegenLoading(false);
+          setRegenError("세션이 만료되어 로그인이 필요해요.");
+          onAuthRequired?.();
+          return;
         }
 
         setRegenLoading(false);
-        setRegenError("세션 확인이 필요해요. 다시 로그인해 주세요.");
-        onAuthRequired?.();
+        if (syncedProfile.code === API_ERROR_CODE.UNAUTHORIZED) {
+          setRegenError("세션이 만료되어 로그인이 필요해요.");
+          onAuthRequired?.();
+          return;
+        }
+        setRegenError(
+          syncedProfile.error ?? "세션 동기화 중 오류가 발생했어요. 다시 시도해 주세요.",
+        );
         return;
       }
 
