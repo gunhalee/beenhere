@@ -38,7 +38,7 @@ describe("GET /api/posts/likers-preview", () => {
       {
         post_id: "post-1",
         liker_user_ids: ["u1", "u2"],
-        liker_nicknames: ["A", "B"],
+        liker_nicknames: ["A", "amber_river"],
       },
     ]);
 
@@ -64,7 +64,7 @@ describe("GET /api/posts/likers-preview", () => {
         postId: "post-1",
         likers: [
           { userId: "u1", nickname: "A" },
-          { userId: "u2", nickname: "B" },
+          { userId: "u2", nickname: "Amber River" },
         ],
       },
     ]);

@@ -1,6 +1,7 @@
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { parseCoordinatesFromSearchParams } from "@/lib/api/coordinates";
 import { createReadRouteHandler, failValidation } from "@/lib/api/route-helpers";
+import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { getFeedPostLikersPreviewBatchRepository } from "@/lib/posts/repository/feed";
 import type { FeedLikersPreviewItem } from "@/types/api";
 
@@ -49,7 +50,7 @@ export const GET = createReadRouteHandler<
     const items: FeedLikersPreviewItem[] = rows.map((row) => ({
       postId: String(row.post_id),
       likers: (row.liker_nicknames ?? []).map((nickname, index) => ({
-        nickname: String(nickname),
+        nickname: formatNicknameForDisplay(String(nickname)),
         userId: row.liker_user_ids?.[index] ?? null,
       })),
     }));
