@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,7 @@ type Props = {
   nicknameChangedAt?: string | null;
   onBlockClick?: () => void;
   onNicknameChange?: (newNickname: string, nicknameChangedAt: string) => void;
+  onAuthRequired?: () => void;
 };
 
 function readDaysRemaining(details: unknown): number | null {
@@ -33,6 +34,7 @@ export function ProfileHeader({
   nicknameChangedAt = null,
   onBlockClick,
   onNicknameChange,
+  onAuthRequired,
 }: Props) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -47,6 +49,7 @@ export function ProfileHeader({
       setRegenError(`프로필 이름은 ${daysUntilRegen}일 후 변경할 수 있어요.`);
       return;
     }
+
     setRegenLoading(true);
     setRegenError(null);
 
@@ -54,6 +57,11 @@ export function ProfileHeader({
     setRegenLoading(false);
 
     if (!result.ok) {
+      if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+        onAuthRequired?.();
+        return;
+      }
+
       const daysRemaining = readDaysRemaining(result.details);
       if (result.code === API_ERROR_CODE.COOLDOWN_ACTIVE && daysRemaining !== null) {
         setRegenError(`프로필 이름은 ${daysRemaining}일 후 변경할 수 있어요.`);
@@ -205,7 +213,7 @@ export function ProfileHeader({
                         ? "변경 중..."
                         : canRegenNickname
                           ? "프로필 이름 변경"
-                          : `프로필 이름 변경 (${daysUntilRegen}일 후)`}
+                          : `프로필 이름 변경 (${daysUntilRegen}일)`}
                     </button>
                     <Link
                       href="/auth/logout"

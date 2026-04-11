@@ -212,6 +212,7 @@ export function ProfileScreen({ userId }: Props) {
         nickname={nickname}
         isMyProfile={isMyProfile}
         nicknameChangedAt={nicknameChangedAt}
+        onAuthRequired={openAccountChoice}
         onBlockClick={() => {
           setBlockActionMessage(null);
           setBlockDialogOpen(true);
