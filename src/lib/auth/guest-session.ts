@@ -96,6 +96,8 @@ async function finalizeSession(input: {
       refreshToken: input.session.refresh_token,
       userId: input.session.user.id,
     });
+  } else {
+    clearPersistedGuestSession();
   }
 
   clearMyProfileCache();
@@ -143,6 +145,15 @@ function writeStorage(key: string, value: string) {
   }
 }
 
+function removeStorage(key: string) {
+  if (!canUseLocalStorage()) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage removal failures.
+  }
+}
+
 function generateDeviceId() {
   const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
   if (randomUUID) {
@@ -167,6 +178,10 @@ function readGuestRefreshToken() {
 
 function saveGuestSession(input: { refreshToken: string; userId: string }) {
   writeStorage(GUEST_REFRESH_TOKEN_STORAGE_KEY, input.refreshToken);
+}
+
+export function clearPersistedGuestSession() {
+  removeStorage(GUEST_REFRESH_TOKEN_STORAGE_KEY);
 }
 
 function sleep(ms: number) {
@@ -213,6 +228,8 @@ export async function ensureGuestSession(): Promise<EnsureGuestSessionResult> {
         restored: true,
       });
     }
+
+    clearPersistedGuestSession();
   }
 
   const created = await supabase.auth.signInAnonymously({

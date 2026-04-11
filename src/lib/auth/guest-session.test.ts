@@ -69,6 +69,28 @@ describe("ensureGuestSession guest activity touch", () => {
     });
   });
 
+  it("clears persisted guest refresh token when current session is non-anonymous", async () => {
+    const supabase = createMockSupabase();
+    window.localStorage.setItem("beenhere.guest_refresh_token", "stale-token");
+
+    supabase.auth.getSession.mockResolvedValue({
+      data: {
+        session: {
+          refresh_token: "google-refresh",
+          user: { id: "google-user", is_anonymous: false },
+        },
+      },
+    });
+
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
+
+    const result = await ensureGuestSession();
+
+    expect(result).toEqual({ ok: true, userId: "google-user", restored: false });
+    expect(window.localStorage.getItem("beenhere.guest_refresh_token")).toBeNull();
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
   it("touches guest activity when guest session is restored by refresh token", async () => {
     const supabase = createMockSupabase();
     window.localStorage.setItem("beenhere.guest_refresh_token", "stored-refresh-token");
@@ -127,6 +149,9 @@ describe("ensureGuestSession guest activity touch", () => {
     const result = await ensureGuestSession();
 
     expect(result).toEqual({ ok: true, userId: "guest-new", restored: false });
+    expect(window.localStorage.getItem("beenhere.guest_refresh_token")).toBe(
+      "refresh-token-new",
+    );
     expect(clearMyProfileCache).toHaveBeenCalledTimes(1);
     expect(clearProfileCache).toHaveBeenCalledTimes(1);
     expect(supabase.rpc).toHaveBeenCalledWith("touch_profile_activity", {

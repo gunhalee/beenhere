@@ -8,6 +8,7 @@ import {
   regenNicknameClient,
   updateMyProfileCacheNickname,
 } from "@/lib/api/profile-client";
+import { clearPersistedGuestSession } from "@/lib/auth/guest-session";
 import { API_ERROR_CODE } from "@/lib/api/common-errors";
 import { daysUntilNicknameRegen } from "@/lib/nickname/generate";
 
@@ -219,6 +220,7 @@ export function ProfileHeader({
                         onClick={() => {
                           clearMyProfileCache();
                           clearProfileCache();
+                          clearPersistedGuestSession();
                         }}
                         type="submit"
                         style={{

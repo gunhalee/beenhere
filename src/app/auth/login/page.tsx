@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ensureGuestSession } from "@/lib/auth/guest-session";
+import { bootstrapGuestSession } from "@/lib/auth/guest-session";
 import { startGoogleOAuth } from "@/lib/auth/google-oauth";
 import { sanitizeNextPath } from "@/lib/auth/google-oauth-common";
 
@@ -47,7 +47,7 @@ function LoginForm() {
     setGuestLoading(true);
     setRuntimeErrorMessage(null);
 
-    const result = await ensureGuestSession();
+    const result = await bootstrapGuestSession();
     if (!result.ok) {
       setGuestLoading(false);
       setRuntimeErrorMessage(result.error);
