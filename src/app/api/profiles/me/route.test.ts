@@ -76,8 +76,6 @@ describe("GET /api/profiles/me", () => {
       createdAt: "2026-04-09T00:00:00.000Z",
       profileCreated: true,
       isAnonymous: true,
-      googleLinked: false,
-      canLinkGoogle: true,
     });
 
     const response = await GET();
@@ -88,8 +86,6 @@ describe("GET /api/profiles/me", () => {
         nickname: string;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     };
 
@@ -100,8 +96,6 @@ describe("GET /api/profiles/me", () => {
       nickname: "Tester",
       profileCreated: true,
       isAnonymous: true,
-      googleLinked: false,
-      canLinkGoogle: true,
     });
   });
 });

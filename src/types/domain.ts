@@ -33,8 +33,6 @@ export type MyProfile = Profile & {
   nicknameChangedAt: string | null;
   profileCreated: boolean;
   isAnonymous: boolean;
-  googleLinked: boolean;
-  canLinkGoogle: boolean;
 };
 
 export type ProfilePostItem = {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -22,8 +22,6 @@ export function useProfileContext(userId: string) {
     null,
   );
   const [viewerIsAnonymous, setViewerIsAnonymous] = useState(false);
-  const [viewerGoogleLinked, setViewerGoogleLinked] = useState(false);
-  const [viewerCanLinkGoogle, setViewerCanLinkGoogle] = useState(false);
   const mountedRef = useMountedRef();
   const requestTokenRef = useRef(0);
 
@@ -38,8 +36,6 @@ export function useProfileContext(userId: string) {
       setNicknameChangedAt(null);
       setIsMyProfile(false);
       setViewerIsAnonymous(false);
-      setViewerGoogleLinked(false);
-      setViewerCanLinkGoogle(false);
 
       const profileResult = await fetchProfileClient(userId);
       if (!mountedRef.current || requestTokenRef.current !== requestToken) return;
@@ -65,8 +61,6 @@ export function useProfileContext(userId: string) {
         setNicknameChangedAt(myProfileResult.data.nicknameChangedAt);
         setIsMyProfile(myProfileResult.data.id === userId);
         setViewerIsAnonymous(myProfileResult.data.isAnonymous);
-        setViewerGoogleLinked(myProfileResult.data.googleLinked);
-        setViewerCanLinkGoogle(myProfileResult.data.canLinkGoogle);
       }
     }
 
@@ -84,7 +78,5 @@ export function useProfileContext(userId: string) {
     currentUserId,
     nicknameChangedAt,
     viewerIsAnonymous,
-    viewerGoogleLinked,
-    viewerCanLinkGoogle,
   };
 }

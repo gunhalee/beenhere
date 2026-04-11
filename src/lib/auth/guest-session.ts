@@ -5,7 +5,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const DEVICE_ID_STORAGE_KEY = "beenhere.device_id";
 const GUEST_REFRESH_TOKEN_STORAGE_KEY = "beenhere.guest_refresh_token";
-const GUEST_USER_ID_STORAGE_KEY = "beenhere.guest_user_id";
 
 type EnsureGuestSessionResult =
   | { ok: true; userId: string; restored: boolean }
@@ -92,12 +91,6 @@ function readGuestRefreshToken() {
 
 function saveGuestSession(input: { refreshToken: string; userId: string }) {
   writeStorage(GUEST_REFRESH_TOKEN_STORAGE_KEY, input.refreshToken);
-  writeStorage(GUEST_USER_ID_STORAGE_KEY, input.userId);
-}
-
-// Public accessor used by auth handoff flows.
-export function readLastGuestUserID() {
-  return readStorage(GUEST_USER_ID_STORAGE_KEY);
 }
 
 function sleep(ms: number) {

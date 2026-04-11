@@ -43,8 +43,6 @@ export async function GET() {
       nicknameChangedAt: null,
       profileCreated: true,
       isAnonymous: false,
-      googleLinked: false,
-      canLinkGoogle: false,
     });
   }
 
@@ -59,8 +57,6 @@ export async function GET() {
     nicknameChangedAt: profile.nicknameChangedAt,
     profileCreated: profile.profileCreated,
     isAnonymous: profile.isAnonymous,
-    googleLinked: profile.googleLinked,
-    canLinkGoogle: profile.canLinkGoogle,
   });
 }
 

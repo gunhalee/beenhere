@@ -634,3 +634,23 @@ CI:
 - Anonymous write traffic relief:
   - added migration `0014_anonymous_write_quota.sql` with RPC `consume_anonymous_write_quota`.
   - anonymous-only per-account write quota enforced in write routes (429 on quota exhaustion).
+
+## 34) Remove Guest->Google Migration Flow (2026-04-11)
+
+- Policy update:
+  - keep both entry paths (`Continue as Guest`, `Continue with Google`).
+  - guest and Google account data are now strictly separated (no migration/linking).
+- Auth flow simplification:
+  - `src/lib/auth/google-oauth-common.ts`: OAuth intent is now `login` only.
+  - `src/app/api/auth/google/start/route.ts`: removed `link-google` and `guest_user_id` handling.
+  - `src/app/auth/callback/route.ts`: removed link-status/upgrade-status branches; callback now does `exchange -> ensure profile -> redirect`.
+- Profile contract/UI cleanup:
+  - removed account-linking fields from my-profile payload (`googleLinked`, `canLinkGoogle`).
+  - removed profile linking banner and callback status messages.
+  - updated login/account-choice copy to explicitly state guest and Google data are not merged.
+- DB hard cleanup:
+  - added migration `supabase/migrations/0021_remove_guest_merge_artifacts.sql`.
+  - dropped `merge_guest_account(uuid, uuid)`, `account_merges`, `guest_conversion_events`.
+- Kept as-is:
+  - guest bootstrap/session restore (`device_id`, refresh-first fallback).
+  - anonymous write quota (`consume_anonymous_write_quota`) and related write-route enforcement.

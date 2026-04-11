@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchApi } from "./client";
 import { getCachedBrowserCoordinates } from "@/lib/geo/browser-location";
 import {
@@ -52,8 +52,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: null,
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
 
@@ -74,8 +72,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
     vi.mocked(fetchApi).mockReturnValue(deferred.promise);
@@ -93,8 +89,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: null,
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
 
@@ -112,8 +106,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
     const latestDeferred = createDeferred<{
@@ -124,8 +116,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
 
@@ -144,8 +134,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: "2026-04-09T01:00:00.000Z",
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
     await latestPromise;
@@ -158,8 +146,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: null,
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
     await stalePromise;
@@ -184,8 +170,6 @@ describe("profile-client my-profile cache", () => {
           nicknameChangedAt: null,
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       })
       .mockResolvedValueOnce({
@@ -196,8 +180,6 @@ describe("profile-client my-profile cache", () => {
           nicknameChangedAt: "2026-04-09T00:00:00.000Z",
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       });
 
@@ -217,8 +199,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: null,
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
 
@@ -249,8 +229,6 @@ describe("profile-client my-profile cache", () => {
           nicknameChangedAt: null,
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       })
       .mockResolvedValueOnce({
@@ -266,8 +244,6 @@ describe("profile-client my-profile cache", () => {
           nicknameChangedAt: null,
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       });
 
@@ -291,8 +267,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
 
@@ -306,8 +280,6 @@ describe("profile-client my-profile cache", () => {
           nicknameChangedAt: null,
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       });
 
@@ -322,8 +294,6 @@ describe("profile-client my-profile cache", () => {
         nicknameChangedAt: null,
         profileCreated: true,
         isAnonymous: false,
-        googleLinked: false,
-        canLinkGoogle: true,
       },
     });
     await stalePromise;
@@ -582,3 +552,4 @@ describe("profile-client profile list coordinate forwarding", () => {
     expect(first).toEqual(second);
   });
 });
+

@@ -252,7 +252,7 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          게스트 계정은 프로필 화면에서 나중에 Google 계정과 연동할 수 있어요.
+          게스트 계정과 Google 계정의 데이터는 서로 분리되어 관리돼요.
         </p>
       </div>
     </main>

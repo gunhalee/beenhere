@@ -25,8 +25,6 @@ type MyProfileData = {
   nicknameChangedAt: string | null;
   profileCreated: boolean;
   isAnonymous: boolean;
-  googleLinked: boolean;
-  canLinkGoogle: boolean;
 };
 
 type CachedMyProfile = {

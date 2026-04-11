@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+﻿import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useProfileContext } from "./use-profile-context";
 import {
@@ -41,8 +41,6 @@ describe("useProfileContext", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
 
@@ -72,8 +70,6 @@ describe("useProfileContext", () => {
           nicknameChangedAt: null,
           profileCreated: true,
           isAnonymous: false,
-          googleLinked: true,
-          canLinkGoogle: false,
         },
       });
     });
@@ -88,8 +84,6 @@ describe("useProfileContext", () => {
         nicknameChangedAt: string | null;
         profileCreated: boolean;
         isAnonymous: boolean;
-        googleLinked: boolean;
-        canLinkGoogle: boolean;
       };
     }>();
 
@@ -114,8 +108,6 @@ describe("useProfileContext", () => {
           nicknameChangedAt: "2026-04-01T00:00:00.000Z",
           profileCreated: true,
           isAnonymous: true,
-          googleLinked: false,
-          canLinkGoogle: true,
         },
       });
     });
@@ -125,8 +117,6 @@ describe("useProfileContext", () => {
       expect(result.current.isMyProfile).toBe(true);
       expect(result.current.nicknameChangedAt).toBe("2026-04-01T00:00:00.000Z");
       expect(result.current.viewerIsAnonymous).toBe(true);
-      expect(result.current.viewerGoogleLinked).toBe(false);
-      expect(result.current.viewerCanLinkGoogle).toBe(true);
     });
   });
 });

@@ -1,11 +1,10 @@
-import { fail, ok } from "@/lib/api/response";
+﻿import { fail, ok } from "@/lib/api/response";
 import { readJsonBody } from "@/lib/api/request";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   buildGoogleCallbackUrl,
-  sanitizeGuestUserId,
   isGoogleOAuthIntent,
   sanitizeNextPath,
 } from "@/lib/auth/google-oauth-common";
@@ -13,7 +12,6 @@ import {
 type StartGoogleOAuthBody = {
   intent?: string;
   nextPath?: string;
-  guestUserId?: string;
 };
 
 type StartGoogleOAuthResponse = {
@@ -54,51 +52,20 @@ export async function POST(request: Request) {
     return bodyResult.response;
   }
 
-  const { intent, nextPath, guestUserId } = bodyResult.body;
+  const { intent, nextPath } = bodyResult.body;
   if (!isGoogleOAuthIntent(intent)) {
     return fail(API_ERROR_MESSAGE.INVALID_REQUEST, 400, API_ERROR_CODE.INVALID_REQUEST);
   }
 
-  const sanitizedNextPath = sanitizeNextPath(nextPath);
-  const sanitizedGuestUserId = sanitizeGuestUserId(guestUserId);
   const origin = new URL(request.url).origin;
   const redirectTo = buildGoogleCallbackUrl({
     origin,
     intent,
-    nextPath: sanitizedNextPath,
-    guestUserId: sanitizedGuestUserId,
+    nextPath: sanitizeNextPath(nextPath),
   });
 
   try {
     const supabase = await createSupabaseServerClient();
-
-    if (intent === "link-google") {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
-      }
-
-      const { data, error } = await supabase.auth.linkIdentity({
-        provider: "google",
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error || !data?.url) {
-        return fail(
-          error?.message ?? "Google 계정 연결을 시작하지 못했어요.",
-          400,
-          API_ERROR_CODE.INVALID_REQUEST,
-        );
-      }
-
-      return ok<StartGoogleOAuthResponse>({ url: data.url });
-    }
 
     return startGoogleLoginOAuth({
       supabase,

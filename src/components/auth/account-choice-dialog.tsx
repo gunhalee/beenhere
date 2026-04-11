@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 type Props = {
   open: boolean;
@@ -79,9 +79,9 @@ export function AccountChoiceDialog({
             margin: "0 0 18px",
           }}
         >
-          Google 계정으로 남기거나 저장한 글은 두고두고 꺼내볼 수 있어요.
+          Google 계정은 로그인한 기기와 무관하게 계속 사용할 수 있어요.
           <br />
-          게스트 계정으로도 글 작성, 저장에는 아무런 문제가 없답니다.
+          게스트 계정 데이터는 Google 계정으로 이전되지 않아요.
         </p>
 
         {errorMessage ? (

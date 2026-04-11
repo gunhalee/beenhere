@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   ProfileLikeItem as ProfileLikeItemType,
   ProfilePostItem as ProfilePostItemType,
@@ -18,7 +18,6 @@ import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
 import { FeedReportDialog } from "@/components/feed/feed-report-dialog";
 import { ProfileHeader } from "./profile-header";
 import { ProfileBlockDialog } from "./profile-block-dialog";
-import { ProfileLinkGoogleBanner } from "./profile-link-google-banner";
 import {
   ProfileLikesTabContent,
   ProfilePostsTabContent,
@@ -33,52 +32,6 @@ const TAB_LABELS: Record<ProfileTab, string> = {
   likes: "라이크한 글",
 };
 
-type LinkResultTone = "success" | "error";
-
-type LinkResultMessage = {
-  tone: LinkResultTone;
-  message: string;
-};
-
-const LINK_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
-  identity_already_exists: {
-    tone: "error",
-    message: "이미 다른 사용자에 연동된 Google 계정이에요. 자동 전환으로 데이터 병합을 진행할게요.",
-  },
-  auto_switch_failed: {
-    tone: "error",
-    message:
-      "이미 다른 사용자에 연동된 Google 계정이에요. 자동 전환을 시작하지 못했어요. Google 로그인으로 다시 시도해 주세요.",
-  },
-  exchange_failed: {
-    tone: "error",
-    message: "Google 계정 연동을 완료하지 못했어요. 다시 시도해 주세요.",
-  },
-  missing_code: {
-    tone: "error",
-    message: "유효한 Google 연동 토큰을 찾지 못했어요.",
-  },
-  profile_missing: {
-    tone: "error",
-    message: "프로필 정보를 불러오지 못했어요. 다시 시도해 주세요.",
-  },
-  user_missing: {
-    tone: "error",
-    message: "사용자 세션을 확인하지 못했어요. 다시 로그인해 주세요.",
-  },
-};
-
-const UPGRADE_RESULT_MESSAGES: Record<string, LinkResultMessage> = {
-  merged: {
-    tone: "success",
-    message: "게스트 계정 데이터가 현재 계정으로 병합됐어요.",
-  },
-  failed: {
-    tone: "error",
-    message: "게스트 계정 데이터 병합에 실패했어요. 잠시 후 다시 시도해 주세요.",
-  },
-};
-
 type ProfileLikeableItem = {
   postId: string;
   likeCount: number;
@@ -88,7 +41,6 @@ type ProfileLikeableItem = {
 
 export function ProfileScreen({ userId }: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const coordsRef = useRef<Coordinates | null>(null);
 
   const {
@@ -100,9 +52,6 @@ export function ProfileScreen({ userId }: Props) {
     isMyProfile,
     currentUserId,
     nicknameChangedAt,
-    viewerIsAnonymous,
-    viewerGoogleLinked,
-    viewerCanLinkGoogle,
   } = useProfileContext(userId);
 
   const {
@@ -126,8 +75,6 @@ export function ProfileScreen({ userId }: Props) {
     null,
   );
   const [likeError, setLikeError] = useState<string | null>(null);
-  const [linkGoogleLoading, setLinkGoogleLoading] = useState(false);
-  const [linkGoogleError, setLinkGoogleError] = useState<string | null>(null);
 
   const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
   const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
@@ -196,71 +143,6 @@ export function ProfileScreen({ userId }: Props) {
     setBlockDialogOpen(false);
     setBlockActionMessage("차단을 해제했어요.");
   }, []);
-
-  const showLinkGoogleBanner =
-    isMyProfile && viewerIsAnonymous && !viewerGoogleLinked && viewerCanLinkGoogle;
-  const linkStatus = searchParams.get("google_link");
-  const linkReason = searchParams.get("google_link_reason");
-  const upgradeStatus = searchParams.get("upgrade");
-  const upgradeReason = searchParams.get("upgrade_reason");
-  const upgradeResultMessage = useMemo(() => {
-    if (!isMyProfile) return null;
-    if (!upgradeStatus) return null;
-
-    const key = upgradeStatus.toLowerCase();
-    if (key === "merged") {
-      return UPGRADE_RESULT_MESSAGES.merged;
-    }
-
-    if (key === "failed") {
-      const reasonText = upgradeReason ? ` (사유: ${upgradeReason})` : "";
-      return {
-        ...UPGRADE_RESULT_MESSAGES.failed,
-        message: `${UPGRADE_RESULT_MESSAGES.failed.message}${reasonText}`,
-      };
-    }
-
-    return null;
-  }, [isMyProfile, upgradeReason, upgradeStatus]);
-  const linkResultMessage = useMemo(() => {
-    if (linkStatus === "success") {
-      return {
-        tone: "success" as const,
-        message: "Google 계정 연동이 완료됐어요.",
-      };
-    }
-
-    if (linkStatus === "failed") {
-      const reasonKey = (linkReason ?? "").toLowerCase();
-      return (
-        LINK_RESULT_MESSAGES[reasonKey] ?? {
-          tone: "error" as const,
-          message: "Google 계정 연동을 완료하지 못했어요. 다시 시도해 주세요.",
-        }
-      );
-    }
-
-    return null;
-  }, [linkReason, linkStatus]);
-
-  const handleLinkGoogle = useCallback(async () => {
-    if (linkGoogleLoading) return;
-
-    setLinkGoogleError(null);
-    setLinkGoogleLoading(true);
-
-    const result = await startGoogleOAuth({
-      intent: "link-google",
-      nextPath: `/profile/${userId}`,
-    });
-
-    if (!result.ok) {
-      setLinkGoogleLoading(false);
-      setLinkGoogleError(
-        result.error ?? "Google 계정 연동을 시작하지 못했어요.",
-      );
-    }
-  }, [linkGoogleLoading, userId]);
 
   const handleGuestContinue = useCallback(async () => {
     if (guestAuthLoading || googleAuthLoading) return;
@@ -339,56 +221,6 @@ export function ProfileScreen({ userId }: Props) {
           setNicknameChangedAt(changedAt);
         }}
       />
-
-      {upgradeResultMessage ? (
-        <div
-          role={upgradeResultMessage.tone === "error" ? "alert" : "status"}
-          style={{
-            background:
-              upgradeResultMessage.tone === "error" ? "#fef2f2" : "#ecfdf3",
-            borderBottom:
-              upgradeResultMessage.tone === "error"
-                ? "1px solid #fecaca"
-                : "1px solid #bbf7d0",
-            color: upgradeResultMessage.tone === "error" ? "#b91c1c" : "#166534",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-          }}
-        >
-          <div>{upgradeResultMessage.message}</div>
-        </div>
-      ) : null}
-
-      {isMyProfile && linkResultMessage ? (
-        <div
-          role={linkResultMessage.tone === "error" ? "alert" : "status"}
-          style={{
-            background:
-              linkResultMessage.tone === "error" ? "#fef2f2" : "#ecfdf3",
-            borderBottom:
-              linkResultMessage.tone === "error"
-                ? "1px solid #fecaca"
-                : "1px solid #bbf7d0",
-            color: linkResultMessage.tone === "error" ? "#b91c1c" : "#166534",
-            fontSize: "13px",
-            lineHeight: 1.5,
-            padding: "10px 20px",
-          }}
-        >
-          <div>{linkResultMessage.message}</div>
-        </div>
-      ) : null}
-
-      {showLinkGoogleBanner ? (
-        <ProfileLinkGoogleBanner
-          loading={linkGoogleLoading}
-          errorMessage={linkGoogleError}
-          onClick={() => {
-            void handleLinkGoogle();
-          }}
-        />
-      ) : null}
 
       <div
         style={{
@@ -525,4 +357,3 @@ export function ProfileScreen({ userId }: Props) {
     </div>
   );
 }
-

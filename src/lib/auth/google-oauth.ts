@@ -1,13 +1,11 @@
-"use client";
+﻿"use client";
 
 import { clearMyProfileCache, clearProfileCache } from "@/lib/api/profile-client";
 import { fetchApi } from "@/lib/api/client";
 import {
   type GoogleOAuthIntent,
-  sanitizeGuestUserId,
   sanitizeNextPath,
 } from "@/lib/auth/google-oauth-common";
-import { readLastGuestUserID } from "@/lib/auth/guest-session";
 
 type StartGoogleOAuthInput = {
   intent: GoogleOAuthIntent;
@@ -35,7 +33,6 @@ export async function startGoogleOAuth(
       body: {
         intent: input.intent,
         nextPath: sanitizeNextPath(input.nextPath),
-        guestUserId: sanitizeGuestUserId(readLastGuestUserID()),
       },
       timeoutMs: 5000,
       timeoutErrorMessage: "Google 인증 시작이 지연되고 있어요.",

@@ -57,8 +57,7 @@ describe("profiles repository", () => {
       id: "user-1",
       nickname: "Tester",
       profileCreated: true,
-      googleLinked: true,
-      canLinkGoogle: false,
+      isAnonymous: false,
     });
 
     await new Promise((resolve) => setTimeout(resolve, 0));

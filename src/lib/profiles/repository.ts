@@ -30,33 +30,6 @@ function toNullableDistance(distanceMeters: number | null | undefined): number |
   return numericDistance;
 }
 
-function hasLinkedProvider(
-  user: {
-    identities?: Array<{ provider?: string | null }> | null;
-    app_metadata?: { provider?: string | null; providers?: unknown } | null;
-  },
-  provider: string,
-): boolean {
-  const normalizedProvider = provider.toLowerCase();
-  const identityLinked = (user.identities ?? []).some(
-    (identity) => identity.provider?.toLowerCase() === normalizedProvider,
-  );
-
-  const appMetadataProvider =
-    typeof user.app_metadata?.provider === "string"
-      ? user.app_metadata.provider.toLowerCase()
-      : null;
-
-  const appMetadataProviders = Array.isArray(user.app_metadata?.providers)
-    ? user.app_metadata.providers
-    : [];
-  const metadataLinked = appMetadataProviders.some(
-    (value) => typeof value === "string" && value.toLowerCase() === normalizedProvider,
-  );
-
-  return identityLinked || appMetadataProvider === normalizedProvider || metadataLinked;
-}
-
 function touchProfileActivityInBackground(input: {
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
   userId: string;
@@ -100,9 +73,7 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
 
   if (!user) return null;
 
-  const googleLinked = hasLinkedProvider(user, "google");
   const isAnonymous = Boolean(user.is_anonymous);
-  const canLinkGoogle = !googleLinked;
 
   touchProfileActivityInBackground({
     supabase,
@@ -125,8 +96,6 @@ export async function getMyProfileRepository(): Promise<MyProfile | null> {
     createdAt: data.created_at as string,
     profileCreated: true,
     isAnonymous,
-    googleLinked,
-    canLinkGoogle,
   };
 }
 
