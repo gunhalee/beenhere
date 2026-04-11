@@ -213,9 +213,7 @@ export default function LoginPage() {
                 margin: 0,
               }}
             >
-              글은 장소에 남고,
-              <br />
-              사람은 글을 따라 발견된다.
+              하나의 장소에도 수많은 기억이 남는다.
             </p>
           </div>
         </div>
@@ -254,7 +252,9 @@ export default function LoginPage() {
             textAlign: "center",
           }}
         >
-          게스트 계정과 Google 계정의 데이터는 서로 분리되어 관리돼요.
+          게스트 계정으로도 자유롭게 사용할 수 있지만,
+          <br />
+          Google 계정은 기기가 바뀌어도 접근할 수 있어요.
         </p>
       </div>
     </main>
