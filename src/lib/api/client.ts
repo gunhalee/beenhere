@@ -19,18 +19,8 @@ async function getAccessToken(): Promise<string | null> {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-
-    if (!session) {
-      const cookieKeys = document.cookie
-        .split(";")
-        .map((c) => c.trim().split("=")[0])
-        .filter((n) => n.includes("auth-token"));
-      console.warn("[auth-debug] getSession()=null, auth cookies in document.cookie:", cookieKeys);
-    }
-
     return session?.access_token ?? null;
-  } catch (error) {
-    console.warn("[auth-debug] getAccessToken error:", error);
+  } catch {
     return null;
   }
 }
