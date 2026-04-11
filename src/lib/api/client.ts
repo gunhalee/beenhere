@@ -69,8 +69,9 @@ async function getAccessToken(): Promise<string | null> {
  * global.headers 에 설정하여 RLS 쿼리에도 적용하고,
  * getServerUser() 에서 쿠키 실패 시 bearer 폴백으로 사용한다.
  *
- * 401 응답 시 리다이렉트를 하지 않는다 — 각 호출측이
- * 컨텍스트에 맞게 처리한다.
+ * 첫 요청은 즉시 전송한다. 401을 받으면 syncBrowserSession() 으로
+ * 세션 상태를 재조회한 뒤 1회 재시도한다.
+ * 401 응답 시 리다이렉트를 하지 않는다 — 각 호출측이 컨텍스트에 맞게 처리한다.
  */
 export async function fetchApi<T>(
   path: string,
@@ -108,8 +109,6 @@ export async function fetchApi<T>(
 
       return (await response.json()) as ApiResult<T>;
     };
-
-    await syncBrowserSession();
 
     const firstResult = await requestOnce();
     console.info("[auth/client] fetchApi firstResult", {

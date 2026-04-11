@@ -4,7 +4,6 @@ import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { createPost } from "@/lib/posts/mutations";
-import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
 import type { CreatePostBody } from "@/types/api";
@@ -12,10 +11,6 @@ import type { CreatePostBody } from "@/types/api";
 const WRITE_RATE_LIMIT = 10;
 const WRITE_RATE_WINDOW_SECONDS = 60;
 const RATE_LIMIT_CONSENT_KEY = "rate_limit_write_at";
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
 
@@ -58,7 +53,7 @@ export async function POST(request: Request) {
     return fail("내용을 입력해 주세요.", 400, API_ERROR_CODE.VALIDATION_ERROR);
   }
 
-  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return fail("유효한 위치 좌표가 필요해요.", 400, API_ERROR_CODE.INVALID_LOCATION);
   }
 
@@ -89,12 +84,9 @@ export async function POST(request: Request) {
 
       const isAnonymous = Boolean(user.is_anonymous);
 
-      await ensureProfileExistsForUser(supabase, user.id, isAnonymous);
-      await touchProfileActivity({
-        supabase,
-        userId: user.id,
-        isAnonymous,
-      });
+      void touchProfileActivity({ supabase, userId: user.id, isAnonymous }).catch(
+        (err) => console.warn("[api/posts] touchProfileActivity failed:", err),
+      );
 
       const quota = await consumeAnonymousWriteQuota({
         supabase,

@@ -6,6 +6,8 @@ import {
   createSupabaseAdminClient,
   createSupabaseServerClient,
 } from "@/lib/supabase/server";
+import { runWithTimeout } from "@/lib/api/request";
+import { API_TIMEOUT_CODE } from "@/lib/api/common-errors";
 
 type FeedStateRow = {
   version: number | string;
@@ -140,24 +142,6 @@ const FEED_STATE_REFRESH_BEST_EFFORT_DEDUP_WINDOW_MS = 1500;
 let inFlightBestEffortRefreshPromise: Promise<void> | null = null;
 let lastBestEffortRefreshAtMs = 0;
 
-async function runWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: NodeJS.Timeout | null = null;
-
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error("FEED_STATE_REFRESH_TIMEOUT"));
-    }, timeoutMs);
-  });
-
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
-
 export async function refreshFeedStateBestEffort(reason: string): Promise<void> {
   if (!hasSupabaseServerConfig()) {
     return;
@@ -177,8 +161,10 @@ export async function refreshFeedStateBestEffort(reason: string): Promise<void> 
   const refreshPromise = (async () => {
     try {
       await runWithTimeout(
-        refreshFeedStateRepository(),
+        () => refreshFeedStateRepository(),
         FEED_STATE_REFRESH_BEST_EFFORT_TIMEOUT_MS,
+        API_TIMEOUT_CODE.TIMEOUT_FEED_STATE_REFRESH,
+        "피드 상태 갱신 시간이 초과됐어요.",
       );
     } catch (error) {
       console.warn(`[feed-state] refresh skipped (${reason}):`, error);
