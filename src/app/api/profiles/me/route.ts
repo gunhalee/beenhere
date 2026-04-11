@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { formatNicknameForDisplay } from "@/lib/nickname/format";
 import { generateNickname } from "@/lib/nickname/generate";
 import {
@@ -139,12 +139,9 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const user = await getServerUser(supabase);
 
-  if (userError || !user) {
+  if (!user) {
     return fail(API_ERROR_MESSAGE.AUTH_REQUIRED, 401, API_ERROR_CODE.UNAUTHORIZED);
   }
 

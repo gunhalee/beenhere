@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { getMyProfileRepository } from "@/lib/profiles/repository";
 
 vi.mock("@/lib/supabase/config", () => ({
@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase/config", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
+  getServerUser: vi.fn(),
 }));
 
 vi.mock("@/lib/profiles/repository", () => ({
@@ -59,6 +60,15 @@ function mockSupabasePost(options?: {
   };
 
   vi.mocked(createSupabaseServerClient).mockResolvedValue(supabase as never);
+
+  const resolvedUser =
+    options?.userId === undefined
+      ? ({ id: "user-1" } as any)
+      : options.userId
+        ? ({ id: options.userId } as any)
+        : null;
+  vi.mocked(getServerUser).mockResolvedValue(resolvedUser);
+
   return { supabase, queryBuilder };
 }
 

@@ -1,7 +1,7 @@
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { deletePost } from "@/lib/posts/mutations";
 
 type Context = { params: Promise<{ postId: string }> };
@@ -11,9 +11,7 @@ export async function DELETE(_request: Request, context: Context) {
 
   if (hasSupabaseBrowserConfig()) {
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getServerUser(supabase);
 
     if (!user) {
       return fail(

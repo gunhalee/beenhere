@@ -32,9 +32,9 @@ async function getAccessToken(): Promise<string | null> {
  * - 쿠키: 미들웨어가 갱신한 세션 (주 경로)
  * - Authorization: 브라우저 세션의 access token (폴백)
  *
- * 서버의 Supabase 클라이언트는 global.headers 를 설정하지 않으므로
- * RLS 쿼리는 쿠키 기반으로 동작하고, Authorization 헤더는
- * getAuthenticatedUser() 의 폴백에서만 사용된다.
+ * 서버의 createSupabaseServerClient() 는 Authorization 헤더가 있으면
+ * global.headers 에 설정하여 RLS 쿼리에도 적용하고,
+ * getServerUser() 에서 쿠키 실패 시 bearer 폴백으로 사용한다.
  *
  * 401 응답 시 리다이렉트를 하지 않는다 — 각 호출측이
  * 컨텍스트에 맞게 처리한다.

@@ -2,7 +2,7 @@ import { readJsonBody } from "@/lib/api/request";
 import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { createBlockRepository } from "@/lib/blocks/repository";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
@@ -29,9 +29,7 @@ export async function POST(request: Request) {
 
   try {
     const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getServerUser(supabase);
 
     if (!user) {
       return fail(

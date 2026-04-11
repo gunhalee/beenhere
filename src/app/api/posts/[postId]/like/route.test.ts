@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DELETE, POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 import { likePost, unlikePost } from "@/lib/posts/mutations";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/config", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
+  getServerUser: vi.fn(),
 }));
 
 vi.mock("@/lib/posts/mutations", () => ({
@@ -97,6 +98,7 @@ describe("POST /api/posts/[postId]/like", () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
       },
     } as never);
+    vi.mocked(getServerUser).mockResolvedValue(null);
 
     const response = await POST(
       makeJsonRequest({
@@ -182,6 +184,7 @@ describe("POST /api/posts/[postId]/like", () => {
       },
       rpc: vi.fn().mockResolvedValue({ error: null }),
     } as never);
+    vi.mocked(getServerUser).mockResolvedValue({ id: "guest-1", is_anonymous: true } as any);
     vi.mocked(ensureProfileExistsForUser).mockRejectedValue(new Error("preflight failed"));
 
     const response = await POST(
@@ -214,6 +217,7 @@ describe("DELETE /api/posts/[postId]/like", () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
       },
     } as never);
+    vi.mocked(getServerUser).mockResolvedValue(null);
 
     const response = await DELETE(
       new Request("http://localhost/api/posts/post-1/like", {

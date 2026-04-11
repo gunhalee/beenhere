@@ -5,13 +5,13 @@ import { getSupabaseConfig } from "./config";
 /**
  * Server Component / Route Handler 에서 사용하는 Supabase 클라이언트.
  *
- * 인증 경로:
- * 1차 — 미들웨어가 갱신한 쿠키 (Edge → Serverless 전파가 되면 동작)
- * 2차 — 클라이언트가 보낸 Authorization 헤더 (global.headers 로 설정)
+ * 인증 이중 경로:
+ *  1차 — 미들웨어가 갱신한 쿠키 (쿠키 전파가 정상이면 동작)
+ *  2차 — 클라이언트가 보낸 Authorization 헤더 (global.headers 로 설정)
  *
- * global.headers.Authorization 을 설정하면 RLS 의 auth.uid() 가
- * 해당 토큰의 sub 클레임으로 평가되어 DB 쿼리도 정상 동작한다.
- * 쿠키가 정상 전파된 경우에도 같은 유저이므로 충돌하지 않는다.
+ * global.headers.Authorization 을 설정하면, 쿠키 세션이 없을 때
+ * RLS 의 auth.uid() 가 해당 토큰의 sub 클레임으로 평가된다.
+ * 쿠키 세션이 존재하면 Supabase 내부에서 쿠키 토큰이 우선한다.
  */
 export async function createSupabaseServerClient() {
   const { url, anonKey } = getSupabaseConfig();
@@ -43,6 +43,37 @@ export async function createSupabaseServerClient() {
       },
     },
   });
+}
+
+type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+function extractBearerToken(raw: string | null) {
+  if (!raw) return null;
+  const [scheme, token] = raw.split(" ", 2);
+  if (!scheme || !token) return null;
+  if (scheme.toLowerCase() !== "bearer") return null;
+  const trimmed = token.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
+ * 쿠키 → bearer 토큰 이중 경로로 인증된 유저를 반환한다.
+ *
+ * 모든 Route Handler 에서 supabase.auth.getUser() 를 직접 호출하는
+ * 대신 이 함수를 사용해야 한다. 쿠키 세션이 만료/누락됐을 때
+ * 클라이언트가 보낸 Authorization 헤더의 access token 으로 폴백한다.
+ */
+export async function getServerUser(supabase: ServerClient) {
+  const cookieResult = await supabase.auth.getUser();
+  if (cookieResult.data.user) return cookieResult.data.user;
+
+  const requestHeaders = await headers();
+  const token = extractBearerToken(requestHeaders.get("authorization"));
+  if (!token) return null;
+
+  const bearerResult = await supabase.auth.getUser(token);
+  if (bearerResult.error || !bearerResult.data.user) return null;
+  return bearerResult.data.user;
 }
 
 /**

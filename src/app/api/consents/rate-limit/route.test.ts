@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getServerUser } from "@/lib/supabase/server";
 
 vi.mock("@/lib/supabase/config", () => ({
   hasSupabaseBrowserConfig: vi.fn(),
@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase/config", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: vi.fn(),
+  getServerUser: vi.fn(),
 }));
 
 describe("POST /api/consents/rate-limit", () => {
@@ -38,6 +39,7 @@ describe("POST /api/consents/rate-limit", () => {
         getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
       },
     } as never);
+    vi.mocked(getServerUser).mockResolvedValue(null);
 
     const response = await POST();
     const json = (await response.json()) as { ok: boolean; code?: string };
