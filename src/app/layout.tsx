@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { AuthSessionBootstrap } from "@/components/auth/auth-session-bootstrap";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className={cn("font-sans", geist.variable)}>
       <body>
+        <AuthSessionBootstrap />
         {children}
       </body>
     </html>

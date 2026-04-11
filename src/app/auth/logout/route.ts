@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { getSupabaseConfig, hasSupabaseBrowserConfig } from "@/lib/supabase/config";
+import { createRouteCookieBridge } from "@/lib/supabase/route-cookie-bridge";
 
 /**
  * Local sign-out only. After logout, always move to login landing.
@@ -10,25 +10,21 @@ import { getSupabaseConfig, hasSupabaseBrowserConfig } from "@/lib/supabase/conf
 export async function GET(request: Request) {
   const { origin } = new URL(request.url);
   const response = NextResponse.redirect(`${origin}/auth/login`);
+  let cookieBridge: Awaited<ReturnType<typeof createRouteCookieBridge>> | null =
+    null;
 
   if (hasSupabaseBrowserConfig()) {
     const { url, anonKey } = getSupabaseConfig();
-    const cookieStore = await cookies();
+    cookieBridge = await createRouteCookieBridge();
+    const activeCookieBridge = cookieBridge;
 
     const supabase = createServerClient(url!, anonKey!, {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return activeCookieBridge.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            try {
-              cookieStore.set(name, value, options);
-            } catch {
-              // Handled via explicit response.cookies.set below
-            }
-            response.cookies.set(name, value, options);
-          });
+          activeCookieBridge.setAll(cookiesToSet);
         },
       },
     });
@@ -36,6 +32,6 @@ export async function GET(request: Request) {
     await supabase.auth.signOut({ scope: "local" });
   }
 
-  return response;
+  return cookieBridge ? cookieBridge.applyToResponse(response) : response;
 }
 

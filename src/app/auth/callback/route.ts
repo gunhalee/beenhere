@@ -1,25 +1,9 @@
 ﻿import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { getSupabaseConfig, hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { sanitizeNextPath } from "@/lib/auth/google-oauth-common";
-
-type PendingCookie = {
-  name: string;
-  value: string;
-  options: Record<string, unknown>;
-};
-
-function applyCookies(
-  response: NextResponse,
-  pendingCookies: Map<string, PendingCookie>,
-) {
-  for (const { name, value, options } of pendingCookies.values()) {
-    response.cookies.set(name, value, options);
-  }
-  return response;
-}
+import { createRouteCookieBridge } from "@/lib/supabase/route-cookie-bridge";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -35,23 +19,15 @@ export async function GET(request: Request) {
   }
 
   const { url, anonKey } = getSupabaseConfig();
-  const cookieStore = await cookies();
-  const pendingCookies = new Map<string, PendingCookie>();
+  const cookieBridge = await createRouteCookieBridge();
 
   const supabase = createServerClient(url!, anonKey!, {
     cookies: {
       getAll() {
-        return cookieStore.getAll();
+        return cookieBridge.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          pendingCookies.set(name, { name, value, options });
-          try {
-            cookieStore.set(name, value, options);
-          } catch {
-            // Handled via explicit applyCookies below
-          }
-        });
+        cookieBridge.setAll(cookiesToSet);
       },
     },
   });
@@ -72,8 +48,7 @@ export async function GET(request: Request) {
 
   await ensureProfileExistsForUser(supabase, user.id, Boolean(user.is_anonymous));
 
-  return applyCookies(
+  return cookieBridge.applyToResponse(
     NextResponse.redirect(new URL(nextPath, origin)),
-    pendingCookies,
   );
 }
