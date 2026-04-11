@@ -1,13 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { getSupabaseConfig } from "./config";
 
 /**
  * Server Component / Route Handler 에서 사용하는 Supabase 클라이언트.
  * 쿠키를 통해 사용자 세션을 읽고 갱신한다.
  *
- * Route Handler 에서 DB 변경(write)이 필요한 경우에도 이 클라이언트를 사용한다.
- * RLS는 auth.uid() 기반으로 동작하므로 service_role 키 대신 anon 키를 사용한다.
+ * 미들웨어가 매 요청마다 쿠키 기반 토큰 갱신을 담당하므로,
+ * 이 클라이언트는 별도 Authorization 헤더 없이 쿠키만으로 인증한다.
  */
 export async function createSupabaseServerClient() {
   const { url, anonKey } = getSupabaseConfig();
@@ -17,22 +17,13 @@ export async function createSupabaseServerClient() {
   }
 
   const cookieStore = await cookies();
-  const headerStore = await headers();
-  const authorizationHeader = headerStore.get("authorization");
 
   return createServerClient(url, anonKey, {
-    global: authorizationHeader
-      ? {
-          headers: {
-            Authorization: authorizationHeader,
-          },
-        }
-      : undefined,
     cookies: {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet, _headersToSet) {
+      setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options),

@@ -1,16 +1,7 @@
 import type { ApiResult } from "@/types/api";
 import { API_ERROR_CODE } from "./common-errors";
-import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const DEFAULT_TIMEOUT_MS = 8000;
-const SESSION_RECHECK_ATTEMPTS = 2;
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
 
 type FetchOptions = {
   method?: "GET" | "POST" | "DELETE" | "PATCH";
@@ -20,83 +11,15 @@ type FetchOptions = {
   timeoutCode?: string;
 };
 
-async function getBrowserAccessToken() {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const supabase = getSupabaseBrowserClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  } catch (error) {
-    console.warn("[api/client] access token read failed:", error);
-    return null;
-  }
-}
-
-async function tryRecoverBrowserSession() {
-  if (typeof window === "undefined") return false;
-
-  try {
-    const supabase = getSupabaseBrowserClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (session?.refresh_token) {
-      const refreshedWithToken = await supabase.auth.refreshSession({
-        refresh_token: session.refresh_token,
-      });
-      if (refreshedWithToken.data.session?.user) {
-        return true;
-      }
-    }
-
-    const refreshed = await supabase.auth.refreshSession();
-    if (refreshed.data.session?.user) {
-      return true;
-    }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user ?? session?.user) {
-      return true;
-    }
-
-    // Allow a couple of event-loop ticks so browser cookies can catch up
-    // when token refresh and subsequent API calls race in parallel.
-    for (let attempt = 0; attempt < SESSION_RECHECK_ATTEMPTS; attempt += 1) {
-      await sleep(0);
-
-      const {
-        data: { session: recheckedSession },
-      } = await supabase.auth.getSession();
-      if (recheckedSession?.user) {
-        return true;
-      }
-
-      const {
-        data: { user: recheckedUser },
-      } = await supabase.auth.getUser();
-      if (recheckedUser) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    console.warn("[api/client] session recovery failed:", error);
-    return false;
-  }
-}
-
 /**
  * 클라이언트 사이드 API 호출 헬퍼.
- * - 기본 8초 timeout
- * - ok/fail 응답 구조 유지
- * - raw fetch 대신 이 함수를 우선 사용한다 (maintenance guide 5-2)
+ *
+ * 인증은 브라우저 쿠키로만 처리한다.
+ * 미들웨어가 매 요청 전에 쿠키 기반 토큰을 갱신하므로,
+ * 클라이언트에서 별도로 Authorization 헤더를 보내지 않는다.
+ *
+ * 401 응답 시 리다이렉트를 하지 않는다 — 각 호출측이
+ * 컨텍스트에 맞게 처리한다 (재시도, 에러 표시, 로그인 리다이렉트 등).
  */
 export async function fetchApi<T>(
   path: string,
@@ -114,49 +37,19 @@ export async function fetchApi<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const requestOnce = async () => {
-      const accessToken = await getBrowserAccessToken();
-      const headers: Record<string, string> = {};
-      if (body !== undefined) {
-        headers["Content-Type"] = "application/json";
-      }
-      if (accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`;
-      }
-
-      const response = await fetch(path, {
-        method,
-        headers: Object.keys(headers).length ? headers : undefined,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-      return (await response.json()) as ApiResult<T>;
-    };
-
-    const firstResult = await requestOnce();
-
-    if (
-      !firstResult.ok &&
-      firstResult.code === API_ERROR_CODE.UNAUTHORIZED
-    ) {
-      const recovered = await tryRecoverBrowserSession();
-      if (recovered) {
-        const retryResult = await requestOnce();
-        if (
-          retryResult.ok ||
-          retryResult.code !== API_ERROR_CODE.UNAUTHORIZED
-        ) {
-          return retryResult;
-        }
-
-        redirectToLoginWithNext(undefined, { forceLanding: true });
-        return retryResult;
-      }
-
-      redirectToLoginWithNext(undefined, { forceLanding: true });
+    const headers: Record<string, string> = {};
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
     }
 
-    return firstResult;
+    const response = await fetch(path, {
+      method,
+      headers: Object.keys(headers).length ? headers : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+
+    return (await response.json()) as ApiResult<T>;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: timeoutErrorMessage, code: timeoutCode };

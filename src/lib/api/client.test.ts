@@ -1,15 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchApi } from "./client";
-import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-vi.mock("@/lib/auth/login-redirect", () => ({
-  redirectToLoginWithNext: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase/client", () => ({
-  getSupabaseBrowserClient: vi.fn(),
-}));
 
 type ApiResult<T> =
   | { ok: true; data: T }
@@ -21,171 +11,40 @@ function mockJsonResponse<T>(payload: ApiResult<T>) {
   };
 }
 
-function createMockSupabaseSessionClient(input?: {
-  sessionUserId?: string | null;
-  refreshUserId?: string | null;
-}) {
-  const auth = {
-    getSession: vi.fn().mockResolvedValue({
-      data: {
-        session: input?.sessionUserId
-          ? {
-              user: { id: input.sessionUserId },
-              refresh_token: "refresh-token",
-              access_token: "access-token-session",
-            }
-          : null,
-      },
-    }),
-    refreshSession: vi.fn().mockResolvedValue({
-      data: {
-        session: input?.refreshUserId
-          ? {
-              user: { id: input.refreshUserId },
-              refresh_token: "refresh-token-next",
-              access_token: "access-token-refresh",
-            }
-          : null,
-      },
-      error: input?.refreshUserId ? null : { message: "invalid refresh token" },
-    }),
-    getUser: vi.fn().mockResolvedValue({
-      data: {
-        user: input?.refreshUserId
-          ? { id: input.refreshUserId }
-          : input?.sessionUserId
-            ? { id: input.sessionUserId }
-            : null,
-      },
-      error: null,
-    }),
-  };
-
-  return { auth };
-}
-
-describe("fetchApi unauthorized recovery", () => {
+describe("fetchApi", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(
-      createMockSupabaseSessionClient() as never,
-    );
   });
 
-  it("returns successful payload without auth recovery", async () => {
+  it("returns successful payload", async () => {
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: true,
-          data: { value: 1 },
-        }),
+        mockJsonResponse({ ok: true, data: { value: 1 } }),
       );
     vi.stubGlobal("fetch", fetchSpy);
 
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({ ok: true, data: { value: 1 } });
-    expect(getSupabaseBrowserClient).toHaveBeenCalled();
-    expect(redirectToLoginWithNext).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("adds Authorization header when browser session exists", async () => {
+  it("does not send Authorization header", async () => {
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: true,
-          data: { value: 9 },
-        }),
+        mockJsonResponse({ ok: true, data: { value: 1 } }),
       );
     vi.stubGlobal("fetch", fetchSpy);
-
-    const supabase = createMockSupabaseSessionClient({
-      sessionUserId: "user-1",
-      refreshUserId: "user-1",
-    });
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
 
     await fetchApi<{ value: number }>("/api/test");
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/test",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer access-token-session",
-        }),
-      }),
-    );
+    const callArgs = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[1].headers).toBeUndefined();
   });
 
-  it("recovers browser session and retries once before succeeding", async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: false,
-          error: "unauthorized",
-          code: "UNAUTHORIZED",
-        }),
-      )
-      .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: true,
-          data: { value: 2 },
-        }),
-      );
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const supabase = createMockSupabaseSessionClient({
-      sessionUserId: "user-1",
-      refreshUserId: "user-1",
-    });
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
-
-    const result = await fetchApi<{ value: number }>("/api/test");
-
-    expect(result).toEqual({ ok: true, data: { value: 2 } });
-    expect(supabase.auth.getSession).toHaveBeenCalled();
-    expect(supabase.auth.refreshSession).toHaveBeenCalled();
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(redirectToLoginWithNext).not.toHaveBeenCalled();
-  });
-
-  it("recovers even when getSession is null but refreshSession restores user", async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: false,
-          error: "unauthorized",
-          code: "UNAUTHORIZED",
-        }),
-      )
-      .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: true,
-          data: { value: 3 },
-        }),
-      );
-    vi.stubGlobal("fetch", fetchSpy);
-
-    const supabase = createMockSupabaseSessionClient({
-      sessionUserId: null,
-      refreshUserId: "user-1",
-    });
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
-
-    const result = await fetchApi<{ value: number }>("/api/test");
-
-    expect(result).toEqual({ ok: true, data: { value: 3 } });
-    expect(supabase.auth.getSession).toHaveBeenCalled();
-    expect(supabase.auth.refreshSession).toHaveBeenCalled();
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(redirectToLoginWithNext).not.toHaveBeenCalled();
-  });
-
-  it("redirects to forced landing when session recovery fails", async () => {
+  it("returns unauthorized result without redirecting", async () => {
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce(
@@ -196,12 +55,6 @@ describe("fetchApi unauthorized recovery", () => {
         }),
       );
     vi.stubGlobal("fetch", fetchSpy);
-
-    const supabase = createMockSupabaseSessionClient({
-      sessionUserId: null,
-      refreshUserId: null,
-    });
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
 
     const result = await fetchApi<{ value: number }>("/api/test");
 
@@ -211,46 +64,61 @@ describe("fetchApi unauthorized recovery", () => {
       code: "UNAUTHORIZED",
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(redirectToLoginWithNext).toHaveBeenCalledWith(undefined, {
-      forceLanding: true,
-    });
   });
 
-  it("redirects when retry is still unauthorized after session recovery", async () => {
+  it("sends Content-Type header and serialized body for POST", async () => {
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: false,
-          error: "unauthorized-1",
-          code: "UNAUTHORIZED",
-        }),
-      )
-      .mockResolvedValueOnce(
-        mockJsonResponse({
-          ok: false,
-          error: "unauthorized-2",
-          code: "UNAUTHORIZED",
-        }),
+        mockJsonResponse({ ok: true, data: { id: "1" } }),
       );
     vi.stubGlobal("fetch", fetchSpy);
 
-    const supabase = createMockSupabaseSessionClient({
-      sessionUserId: "user-1",
-      refreshUserId: "user-1",
+    await fetchApi<{ id: string }>("/api/test", {
+      method: "POST",
+      body: { name: "test" },
     });
-    vi.mocked(getSupabaseBrowserClient).mockReturnValue(supabase as never);
+
+    const callArgs = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(callArgs[1].headers).toEqual({
+      "Content-Type": "application/json",
+    });
+    expect(callArgs[1].body).toBe(JSON.stringify({ name: "test" }));
+  });
+
+  it("returns timeout error when request is aborted", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(
+        Object.assign(new Error("aborted"), { name: "AbortError" }),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await fetchApi<{ value: number }>("/api/test", {
+      timeoutMs: 100,
+      timeoutErrorMessage: "시간 초과",
+      timeoutCode: "CUSTOM_TIMEOUT",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "시간 초과",
+      code: "CUSTOM_TIMEOUT",
+    });
+  });
+
+  it("returns network error on fetch failure", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network down"));
+    vi.stubGlobal("fetch", fetchSpy);
 
     const result = await fetchApi<{ value: number }>("/api/test");
 
     expect(result).toEqual({
       ok: false,
-      error: "unauthorized-2",
-      code: "UNAUTHORIZED",
-    });
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(redirectToLoginWithNext).toHaveBeenCalledWith(undefined, {
-      forceLanding: true,
+      error: "network down",
+      code: "NETWORK_ERROR",
     });
   });
 });
