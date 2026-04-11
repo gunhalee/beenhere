@@ -54,7 +54,7 @@ describe("auth logout route", () => {
 
     const response = await POST(new Request("http://localhost/auth/logout"));
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost/auth/login");
     expect(createServerClient).toHaveBeenCalled();
     expect(signOut).toHaveBeenCalledWith({ scope: "local" });
@@ -66,7 +66,7 @@ describe("auth logout route", () => {
 
     const response = await POST(new Request("http://localhost/auth/logout"));
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost/auth/login");
     expect(createServerClient).not.toHaveBeenCalled();
     expect(createRouteCookieBridge).not.toHaveBeenCalled();

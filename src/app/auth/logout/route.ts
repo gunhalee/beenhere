@@ -21,7 +21,8 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   const { origin } = new URL(request.url);
-  const response = NextResponse.redirect(`${origin}/auth/login`);
+  // Use 303 so browsers always switch to GET on /auth/login after POST logout.
+  const response = NextResponse.redirect(`${origin}/auth/login`, 303);
   let cookieBridge: Awaited<ReturnType<typeof createRouteCookieBridge>> | null =
     null;
 
