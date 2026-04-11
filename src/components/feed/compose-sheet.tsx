@@ -290,7 +290,7 @@ export function ComposeSheet({
               }
               if (status === "error") setStatus("ready");
             }}
-            placeholder="지금 이 장소에서 떠오르는 이야기를 남겨보세요"
+            placeholder="이 장소에 이야기를 남겨보세요."
             rows={5}
             value={content}
             style={{
