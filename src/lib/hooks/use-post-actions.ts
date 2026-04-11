@@ -7,6 +7,7 @@ import { getGeocodingErrorMessage } from "@/lib/geo/reverse-geocode";
 import { resolvePlaceLabelWithCache } from "@/lib/geo/place-label-cache";
 import {
   likePostClient,
+  unlikePostClient,
   deletePostClient,
   reportPostClient,
 } from "@/lib/api/feed-client";
@@ -90,35 +91,45 @@ export function usePostActions<
 
   const handleLike = useCallback(
     async (item: TItem) => {
-      if (item.myLike) return;
       if (likePendingRef.current.has(item.postId)) return;
 
       likePendingRef.current.add(item.postId);
 
-      const coords = await resolveCoordinates();
-      if (!coords) {
-        likePendingRef.current.delete(item.postId);
-        return;
+      const wasLiked = item.myLike;
+      let coords: Coordinates | null = null;
+      let placeLabel: string | null = null;
+
+      if (!wasLiked) {
+        coords = await resolveCoordinates();
+        if (!coords) {
+          likePendingRef.current.delete(item.postId);
+          return;
+        }
+        placeLabel = await resolveLikePlaceLabel(coords, item.placeLabel);
       }
 
-      const placeLabel = await resolveLikePlaceLabel(coords, item.placeLabel);
+      const optimisticLikeCount = wasLiked
+        ? Math.max(item.likeCount - 1, 0)
+        : item.likeCount + 1;
 
       updateItem(item.postId, {
-        myLike: true,
-        likeCount: item.likeCount + 1,
+        myLike: !wasLiked,
+        likeCount: optimisticLikeCount,
       } as Partial<TItem>);
 
-      const result = await likePostClient(item.postId, {
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        placeLabel,
-      });
+      const result = wasLiked
+        ? await unlikePostClient(item.postId)
+        : await likePostClient(item.postId, {
+            latitude: coords!.latitude,
+            longitude: coords!.longitude,
+            placeLabel: placeLabel!,
+          });
 
       likePendingRef.current.delete(item.postId);
 
       if (!result.ok) {
         updateItem(item.postId, {
-          myLike: false,
+          myLike: wasLiked,
           likeCount: item.likeCount,
         } as Partial<TItem>);
 
@@ -132,6 +143,7 @@ export function usePostActions<
       }
 
       updateItem(item.postId, {
+        myLike: !wasLiked,
         likeCount: result.data.likeCount,
       } as Partial<TItem>);
     },

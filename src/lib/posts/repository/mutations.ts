@@ -43,6 +43,18 @@ export async function likePostRepository(input: {
   return data as LikePostRpcResult;
 }
 
+export async function unlikePostRepository(postId: string): Promise<LikePostRpcResult> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.rpc("unlike_post", {
+    p_post_id: postId,
+  });
+
+  if (error) throw error;
+
+  return data as LikePostRpcResult;
+}
+
 export async function deletePostRepository(postId: string): Promise<void> {
   const supabase = await createSupabaseServerClient();
 

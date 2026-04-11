@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ensureGuestSession } from "@/lib/auth/guest-session";
 import { startGoogleOAuth } from "@/lib/auth/google-oauth";
+import { sanitizeNextPath } from "@/lib/auth/google-oauth-common";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_code: "로그인 코드가 유효하지 않아요. 다시 시도해 주세요.",
@@ -13,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 function LoginForm() {
   const searchParams = useSearchParams();
   const errorKey = searchParams.get("error");
+  const nextPath = sanitizeNextPath(searchParams.get("next"));
   const queryErrorMessage = errorKey
     ? (ERROR_MESSAGES[errorKey] ?? "로그인에 실패했어요. 다시 시도해 주세요.")
     : null;
@@ -31,7 +33,7 @@ function LoginForm() {
 
     const result = await startGoogleOAuth({
       intent: "login",
-      nextPath: "/",
+      nextPath,
     });
 
     if (!result.ok) {
@@ -52,7 +54,7 @@ function LoginForm() {
       return;
     }
 
-    window.location.href = "/";
+    window.location.href = nextPath;
   }
 
   return (

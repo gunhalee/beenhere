@@ -111,10 +111,9 @@ export function ProfileLikeItem({
         </div>
 
         <button
-          aria-label={myLike ? "이미 좋아요함" : "좋아요"}
+          aria-label={myLike ? "좋아요 취소" : "좋아요"}
           aria-pressed={myLike}
-          disabled={myLike}
-          onClick={() => !myLike && onLike?.(item)}
+          onClick={() => onLike?.(item)}
           type="button"
           style={{
             alignItems: "center",
@@ -123,7 +122,7 @@ export function ProfileLikeItem({
             border: `1px solid ${myLike ? "#fca5a5" : "#e5e7eb"}`,
             borderRadius: "9999px",
             color: myLike ? "#ef4444" : "#6b7280",
-            cursor: myLike ? "default" : "pointer",
+            cursor: "pointer",
             display: "inline-flex",
             flexShrink: 0,
             fontSize: "12px",

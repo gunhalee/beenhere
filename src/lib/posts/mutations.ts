@@ -4,6 +4,7 @@ import {
   createPostRepository,
   deletePostRepository,
   likePostRepository,
+  unlikePostRepository,
   reportPostRepository,
 } from "./repository/mutations";
 import { refreshFeedStateBestEffort } from "./repository/feed-state";
@@ -80,6 +81,49 @@ export async function likePost(input: LikePostInput): Promise<LikePostResult & {
   } catch (err) {
     const code = (err as { code?: string })?.code ?? "";
     const mapped = LIKE_RPC_ERROR_MAP[code];
+    if (mapped) return { ok: false, ...mapped };
+    throw err;
+  }
+}
+
+// ---------------------------
+// unlikePost
+// ---------------------------
+
+type UnlikePostResult =
+  | { ok: true; likeCount: number }
+  | { ok: false; code: string; message: string };
+
+const UNLIKE_RPC_ERROR_MAP: Record<
+  string,
+  { code: string; message: string; status: number }
+> = {
+  P0001: {
+    code: API_ERROR_CODE.UNAUTHORIZED,
+    message: API_ERROR_MESSAGE.AUTH_REQUIRED,
+    status: 401,
+  },
+  P0003: {
+    code: API_ERROR_CODE.POST_NOT_FOUND,
+    message: "글을 찾을 수 없어요.",
+    status: 404,
+  },
+};
+
+export async function unlikePost(
+  postId: string,
+): Promise<UnlikePostResult & { status?: number }> {
+  if (!hasSupabaseBrowserConfig()) {
+    return { ok: true, likeCount: 0 };
+  }
+
+  try {
+    const result = await unlikePostRepository(postId);
+    void refreshFeedStateBestEffort("unlike_post");
+    return { ok: true, likeCount: Number(result.like_count) };
+  } catch (err) {
+    const code = (err as { code?: string })?.code ?? "";
+    const mapped = UNLIKE_RPC_ERROR_MAP[code];
     if (mapped) return { ok: false, ...mapped };
     throw err;
   }

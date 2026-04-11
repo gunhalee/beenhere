@@ -1,5 +1,6 @@
 import type { ApiResult } from "@/types/api";
 import { API_ERROR_CODE } from "./common-errors";
+import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -41,6 +42,9 @@ export async function fetchApi<T>(
     });
 
     const json = (await response.json()) as ApiResult<T>;
+    if (!json.ok && json.code === API_ERROR_CODE.UNAUTHORIZED) {
+      redirectToLoginWithNext();
+    }
     return json;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

@@ -3,7 +3,7 @@ import { fail, ok } from "@/lib/api/response";
 import { API_ERROR_CODE, API_ERROR_MESSAGE } from "@/lib/api/common-errors";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { likePost } from "@/lib/posts/mutations";
+import { likePost, unlikePost } from "@/lib/posts/mutations";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 import { touchProfileActivity } from "@/lib/auth/profile-activity";
@@ -95,6 +95,51 @@ export async function POST(request: Request, context: Context) {
     console.error("[api/posts/:postId/like] 라이크 실패:", error);
     return fail(
       "라이크 처리 중 오류가 발생했어요.",
+      500,
+      API_ERROR_CODE.INTERNAL_ERROR,
+    );
+  }
+}
+
+export async function DELETE(_request: Request, context: Context) {
+  const { postId } = await context.params;
+
+  if (hasSupabaseBrowserConfig()) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return fail(
+          API_ERROR_MESSAGE.AUTH_REQUIRED,
+          401,
+          API_ERROR_CODE.UNAUTHORIZED,
+        );
+      }
+    } catch (error) {
+      console.error("[api/posts/:postId/like:DELETE] auth preflight failed:", error);
+      return fail(
+        "요청 검증 중 오류가 발생했어요.",
+        500,
+        API_ERROR_CODE.INTERNAL_ERROR,
+      );
+    }
+  }
+
+  try {
+    const result = await unlikePost(postId);
+    if (!result.ok) {
+      const status = (result as { status?: number }).status ?? 400;
+      return fail(result.message, status, result.code);
+    }
+
+    return ok({ likeCount: result.likeCount });
+  } catch (error) {
+    console.error("[api/posts/:postId/like:DELETE] unlike failed:", error);
+    return fail(
+      "라이크 취소 처리 중 오류가 발생했어요.",
       500,
       API_ERROR_CODE.INTERNAL_ERROR,
     );

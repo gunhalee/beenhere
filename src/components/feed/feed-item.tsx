@@ -191,13 +191,13 @@ export function FeedItemCard({
           </div>
 
           <button
-            aria-label={myLike ? "이미 라이크함" : "라이크"}
+            aria-label={myLike ? "라이크 취소" : "라이크"}
             aria-pressed={myLike}
-            disabled={myLike || !locationAvailable}
+            disabled={!locationAvailable && !myLike}
             onClick={() => onLike(item)}
             type="button"
             title={
-              !locationAvailable
+              !locationAvailable && !myLike
                 ? "위치 권한이 있어야 라이크할 수 있어요"
                 : undefined
             }
@@ -208,7 +208,7 @@ export function FeedItemCard({
               border: `1px solid ${myLike ? "#fca5a5" : "#e5e7eb"}`,
               borderRadius: "9999px",
               color: myLike ? "#ef4444" : "#6b7280",
-              cursor: myLike || !locationAvailable ? "default" : "pointer",
+              cursor: !locationAvailable && !myLike ? "default" : "pointer",
               display: "inline-flex",
               flexShrink: 0,
               fontSize: "12px",

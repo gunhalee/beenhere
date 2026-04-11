@@ -1,5 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sanitizeNextPath } from "@/lib/auth/google-oauth-common";
+
+const AUTH_LOGIN_PATH = "/auth/login";
+const AUTH_CALLBACK_PATH = "/auth/callback";
+
+function isApiPath(pathname: string) {
+  return pathname.startsWith("/api");
+}
+
+function isPublicUnauthPath(pathname: string) {
+  return pathname === AUTH_LOGIN_PATH || pathname === AUTH_CALLBACK_PATH;
+}
+
+function getCurrentPathWithSearch(request: NextRequest) {
+  return `${request.nextUrl.pathname}${request.nextUrl.search}`;
+}
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -36,11 +52,20 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // 로그인 페이지 → 이미 로그인된 경우 피드로
-  if (pathname === "/auth/login" && user) {
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = "/";
-    return NextResponse.redirect(homeUrl);
+  if (pathname === AUTH_LOGIN_PATH && user) {
+    const nextPath = sanitizeNextPath(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(nextPath, request.url));
+  }
+
+  if (!user && !isApiPath(pathname) && !isPublicUnauthPath(pathname)) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = AUTH_LOGIN_PATH;
+    loginUrl.search = "";
+    loginUrl.searchParams.set(
+      "next",
+      sanitizeNextPath(getCurrentPathWithSearch(request)),
+    );
+    return NextResponse.redirect(loginUrl);
   }
 
   return response;
@@ -51,3 +76,4 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
+

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -7,14 +7,12 @@ import type {
   ProfilePostItem as ProfilePostItemType,
 } from "@/types/domain";
 import type { Coordinates } from "@/lib/geo/browser-location";
-import { startGoogleOAuth } from "@/lib/auth/google-oauth";
-import { ensureGuestSession } from "@/lib/auth/guest-session";
 import { useProfile, type ProfileTab } from "@/lib/hooks/use-profile";
 import { useProfileContext } from "@/lib/hooks/use-profile-context";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
+import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
 import { LoadingState } from "@/components/common/loading-state";
 import { ErrorState } from "@/components/common/error-state";
-import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
 import { FeedReportDialog } from "@/components/feed/feed-report-dialog";
 import { ProfileHeader } from "./profile-header";
 import { ProfileBlockDialog } from "./profile-block-dialog";
@@ -52,6 +50,7 @@ export function ProfileScreen({ userId }: Props) {
     isMyProfile,
     currentUserId,
     nicknameChangedAt,
+    viewerIsAnonymous,
   } = useProfileContext(userId);
 
   const {
@@ -76,15 +75,9 @@ export function ProfileScreen({ userId }: Props) {
   );
   const [likeError, setLikeError] = useState<string | null>(null);
 
-  const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
-  const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
-  const [guestAuthLoading, setGuestAuthLoading] = useState(false);
-  const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
-
-  const openAccountChoice = useCallback(() => {
-    setAccountChoiceError(null);
-    setAccountChoiceOpen(true);
-  }, []);
+  const redirectToLogin = useCallback(() => {
+    redirectToLoginWithNext(`/profile/${userId}`);
+  }, [userId]);
 
   const updateAnyItem = useCallback(
     (postId: string, patch: Partial<ProfileLikeableItem>) => {
@@ -108,7 +101,7 @@ export function ProfileScreen({ userId }: Props) {
     coordsRef,
     onLocationError: setLikeError,
     onActionError: setLikeError,
-    onAuthRequired: openAccountChoice,
+    onAuthRequired: redirectToLogin,
   });
 
   const onLike = useCallback(
@@ -144,39 +137,8 @@ export function ProfileScreen({ userId }: Props) {
     setBlockActionMessage("차단을 해제했어요.");
   }, []);
 
-  const handleGuestContinue = useCallback(async () => {
-    if (guestAuthLoading || googleAuthLoading) return;
-
-    setGuestAuthLoading(true);
-    setAccountChoiceError(null);
-
-    const result = await ensureGuestSession();
-    if (!result.ok) {
-      setGuestAuthLoading(false);
-      setAccountChoiceError(result.error);
-      return;
-    }
-
-    // Session context is shared through Supabase cookies/storage, so a hard refresh is the safest sync path.
-    window.location.href = `${window.location.pathname}${window.location.search}`;
-  }, [googleAuthLoading, guestAuthLoading]);
-
-  const handleGoogleContinue = useCallback(async () => {
-    if (guestAuthLoading || googleAuthLoading) return;
-
-    setGoogleAuthLoading(true);
-    setAccountChoiceError(null);
-
-    const result = await startGoogleOAuth({
-      intent: "login",
-      nextPath: `/profile/${userId}`,
-    });
-
-    if (!result.ok) {
-      setGoogleAuthLoading(false);
-      setAccountChoiceError(result.error ?? "Google 가입을 시작하지 못했어요.");
-    }
-  }, [googleAuthLoading, guestAuthLoading, userId]);
+  const showGuestProfileBanner = isMyProfile && viewerIsAnonymous;
+  const tabsTopOffset = showGuestProfileBanner ? "105px" : "57px";
 
   if (profileLoadState === "loading") {
     return (
@@ -212,7 +174,7 @@ export function ProfileScreen({ userId }: Props) {
         nickname={nickname}
         isMyProfile={isMyProfile}
         nicknameChangedAt={nicknameChangedAt}
-        onAuthRequired={openAccountChoice}
+        onAuthRequired={redirectToLogin}
         onBlockClick={() => {
           setBlockActionMessage(null);
           setBlockDialogOpen(true);
@@ -223,13 +185,34 @@ export function ProfileScreen({ userId }: Props) {
         }}
       />
 
+      {showGuestProfileBanner ? (
+        <div
+          role="status"
+          style={{
+            background: "#eff6ff",
+            borderBottom: "1px solid #bfdbfe",
+            color: "#1e3a8a",
+            fontSize: "13px",
+            fontWeight: 600,
+            lineHeight: 1.5,
+            padding: "10px 16px",
+            position: "sticky",
+            textAlign: "center",
+            top: "57px",
+            zIndex: 3,
+          }}
+        >
+          Google 로그인 시 기기를 변경해도 데이터는 유지됩니다.
+        </div>
+      ) : null}
+
       <div
         style={{
           background: "#ffffff",
           borderBottom: "1px solid rgba(17, 24, 39, 0.06)",
           display: "flex",
           position: "sticky",
-          top: "57px",
+          top: tabsTopOffset,
           zIndex: 3,
         }}
       >
@@ -334,27 +317,11 @@ export function ProfileScreen({ userId }: Props) {
           onClose={() => setBlockDialogOpen(false)}
           onAuthRequired={() => {
             setBlockDialogOpen(false);
-            openAccountChoice();
+            redirectToLogin();
           }}
         />
       ) : null}
-
-      <AccountChoiceDialog
-        open={accountChoiceOpen}
-        guestLoading={guestAuthLoading}
-        googleLoading={googleAuthLoading}
-        errorMessage={accountChoiceError}
-        onGuestContinue={() => {
-          void handleGuestContinue();
-        }}
-        onGoogleContinue={() => {
-          void handleGoogleContinue();
-        }}
-        onClose={() => {
-          if (guestAuthLoading || googleAuthLoading) return;
-          setAccountChoiceOpen(false);
-        }}
-      />
     </div>
   );
 }
+

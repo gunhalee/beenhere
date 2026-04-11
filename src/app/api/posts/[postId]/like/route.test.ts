@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "./route";
+import { DELETE, POST } from "./route";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { likePost } from "@/lib/posts/mutations";
+import { likePost, unlikePost } from "@/lib/posts/mutations";
 import { ensureProfileExistsForUser } from "@/lib/profiles/ensure-profile";
 import { consumeAnonymousWriteQuota } from "@/lib/auth/anonymous-write-quota";
 
@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/posts/mutations", () => ({
   likePost: vi.fn(),
+  unlikePost: vi.fn(),
 }));
 
 vi.mock("@/lib/profiles/ensure-profile", () => ({
@@ -197,5 +198,57 @@ describe("POST /api/posts/[postId]/like", () => {
     expect(json.ok).toBe(false);
     expect(json.code).toBe("INTERNAL_ERROR");
     expect(likePost).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /api/posts/[postId]/like", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(false);
+  });
+
+  it("returns 401 when auth is required and user is missing", async () => {
+    vi.mocked(hasSupabaseBrowserConfig).mockReturnValue(true);
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
+      },
+    } as never);
+
+    const response = await DELETE(
+      new Request("http://localhost/api/posts/post-1/like", {
+        method: "DELETE",
+      }),
+      makeContext(),
+    );
+    const json = (await response.json()) as { ok: boolean; code?: string };
+
+    expect(response.status).toBe(401);
+    expect(json.ok).toBe(false);
+    expect(json.code).toBe("UNAUTHORIZED");
+    expect(unlikePost).not.toHaveBeenCalled();
+  });
+
+  it("returns likeCount on success", async () => {
+    vi.mocked(unlikePost).mockResolvedValue({
+      ok: true,
+      likeCount: 3,
+    });
+
+    const response = await DELETE(
+      new Request("http://localhost/api/posts/post-1/like", {
+        method: "DELETE",
+      }),
+      makeContext("post-9"),
+    );
+    const json = (await response.json()) as {
+      ok: boolean;
+      data?: { likeCount: number };
+    };
+
+    expect(response.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.data).toEqual({ likeCount: 3 });
+    expect(unlikePost).toHaveBeenCalledWith("post-9");
   });
 });

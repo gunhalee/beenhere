@@ -12,10 +12,8 @@ import {
 import { useFeed } from "@/lib/hooks/use-feed";
 import { useMountedRef } from "@/lib/hooks/use-mounted-ref";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
-import { bootstrapGuestSession } from "@/lib/auth/guest-session";
-import { startGoogleOAuth } from "@/lib/auth/google-oauth";
+import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
 import type { FeedItem } from "@/types/domain";
-import { AccountChoiceDialog } from "@/components/auth/account-choice-dialog";
 import { FeedHeader } from "./feed-header";
 import { FeedList } from "./feed-list";
 import { FeedLocationBanner } from "./feed-location-banner";
@@ -50,11 +48,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
   const [pullDistance, setPullDistance] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
 
-  const [accountChoiceOpen, setAccountChoiceOpen] = useState(false);
-  const [accountChoiceError, setAccountChoiceError] = useState<string | null>(null);
-  const [guestAuthLoading, setGuestAuthLoading] = useState(false);
-  const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
-
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pullStartYRef = useRef<number | null>(null);
   const pullGestureActiveRef = useRef(false);
@@ -72,11 +65,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     requestLocation,
   } = useFeed();
 
-  const openAccountChoice = useCallback(() => {
-    setAccountChoiceError(null);
-    setAccountChoiceOpen(true);
-  }, []);
-
   const {
     reportState,
     handleLike,
@@ -92,11 +80,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     onLocationError: setPostActionError,
     onActionError: setPostActionError,
     onAuthRequired: () => {
-      void ensureGuestActor().then((result) => {
-        if (!result.ok && mountedRef.current) {
-          openAccountChoice();
-        }
-      });
+      redirectToLoginWithNext();
     },
   });
 
@@ -105,47 +89,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
     ? Math.max(pullDistance, PULL_TO_REFRESH_TRIGGER_PX)
     : pullDistance;
   const pullReady = pullDistance >= PULL_TO_REFRESH_TRIGGER_PX;
-
-  const syncProfileAfterSession = useCallback(
-    async (fallbackUserId?: string | null) => {
-      const profileResult = await fetchMyProfileClient({ force: true });
-      if (!mountedRef.current) {
-        return false;
-      }
-
-      if (profileResult.ok) {
-        setResolvedCurrentUserId(profileResult.data.id);
-        setResolvedCurrentNickname(profileResult.data.nickname);
-        return true;
-      }
-
-      if (fallbackUserId) {
-        setResolvedCurrentUserId(fallbackUserId);
-        setResolvedCurrentNickname("게스트");
-        return true;
-      }
-
-      setResolvedCurrentUserId(null);
-      setResolvedCurrentNickname(null);
-      return false;
-    },
-    [mountedRef],
-  );
-
-  const ensureGuestActor = useCallback(async () => {
-    const sessionResult = await bootstrapGuestSession();
-
-    if (!sessionResult.ok) {
-      if (mountedRef.current) {
-        setResolvedCurrentUserId(null);
-        setResolvedCurrentNickname(null);
-      }
-      return sessionResult;
-    }
-
-    await syncProfileAfterSession(sessionResult.userId);
-    return sessionResult;
-  }, [mountedRef, syncProfileAfterSession]);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -175,19 +118,19 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       const result = await fetchMyProfileClient();
       if (!mountedRef.current) return;
 
-      if (!result.ok && result.code === API_ERROR_CODE.UNAUTHORIZED) {
-        await ensureGuestActor();
+      if (!result.ok) {
+        if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
+          redirectToLoginWithNext();
+        }
         return;
       }
-
-      if (!result.ok) return;
 
       setResolvedCurrentUserId(result.data.id);
       setResolvedCurrentNickname(result.data.nickname);
     }
 
     void resolveCurrentProfile();
-  }, [ensureGuestActor, mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
+  }, [mountedRef, resolvedCurrentNickname, resolvedCurrentUserId]);
 
   const openComposeSheet = useCallback(async () => {
     if (composeLocating) return;
@@ -222,57 +165,12 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
 
   async function handleComposeClick() {
     if (!resolvedCurrentUserId) {
-      const sessionResult = await ensureGuestActor();
-      if (!sessionResult.ok) {
-        if (mountedRef.current) {
-          setComposeError(sessionResult.error);
-        }
-        return;
-      }
+      redirectToLoginWithNext();
+      return;
     }
 
     await openComposeSheet();
   }
-
-  const handleGuestContinue = useCallback(async () => {
-    if (guestAuthLoading || googleAuthLoading) return;
-
-    setGuestAuthLoading(true);
-    setAccountChoiceError(null);
-
-    const sessionResult = await bootstrapGuestSession();
-    if (!sessionResult.ok) {
-      if (mountedRef.current) {
-        setGuestAuthLoading(false);
-        setAccountChoiceError(sessionResult.error);
-      }
-      return;
-    }
-
-    await syncProfileAfterSession(sessionResult.userId);
-    if (!mountedRef.current) return;
-
-    setGuestAuthLoading(false);
-    setAccountChoiceOpen(false);
-  }, [googleAuthLoading, guestAuthLoading, mountedRef, syncProfileAfterSession]);
-
-  const handleGoogleContinue = useCallback(async () => {
-    if (guestAuthLoading || googleAuthLoading) return;
-
-    setGoogleAuthLoading(true);
-    setAccountChoiceError(null);
-
-    const nextPath = `${window.location.pathname}${window.location.search}`;
-    const result = await startGoogleOAuth({
-      intent: "login",
-      nextPath,
-    });
-
-    if (!result.ok && mountedRef.current) {
-      setGoogleAuthLoading(false);
-      setAccountChoiceError(result.error ?? "Google 가입을 시작하지 못했어요.");
-    }
-  }, [googleAuthLoading, guestAuthLoading, mountedRef]);
 
   function handleDismissCompose() {
     setComposeState({ open: false });
@@ -396,7 +294,7 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
       <FeedHeader
         currentUserId={resolvedCurrentUserId}
         currentNickname={resolvedCurrentNickname}
-        isAuthenticated={Boolean(resolvedCurrentUserId)}
+        isAuthenticated
       />
 
       {state.locationDenied ? (
@@ -511,23 +409,6 @@ export function FeedScreen({ currentUserId, currentNickname }: Props) {
           onDismiss={handleDismissCompose}
         />
       ) : null}
-
-      <AccountChoiceDialog
-        open={accountChoiceOpen}
-        guestLoading={guestAuthLoading}
-        googleLoading={googleAuthLoading}
-        errorMessage={accountChoiceError}
-        onGuestContinue={() => {
-          void handleGuestContinue();
-        }}
-        onGoogleContinue={() => {
-          void handleGoogleContinue();
-        }}
-        onClose={() => {
-          if (guestAuthLoading || googleAuthLoading) return;
-          setAccountChoiceOpen(false);
-        }}
-      />
     </div>
   );
 }

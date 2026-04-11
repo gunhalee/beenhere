@@ -7,6 +7,7 @@ import {
   fetchFeedState,
   fetchNearbyFeed,
   likePostClient,
+  unlikePostClient,
   reportPostClient,
 } from "./feed-client";
 
@@ -214,5 +215,30 @@ describe("feed-client write retries", () => {
 
     expect(fetchApi).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(false);
+  });
+
+  it("retries unlike once on timeout", async () => {
+    vi.mocked(fetchApi)
+      .mockResolvedValueOnce({
+        ok: false,
+        error: "timeout",
+        code: API_TIMEOUT_CODE.TIMEOUT_POST_UNLIKE,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { likeCount: 2 },
+      });
+
+    const result = await unlikePostClient("post-1");
+
+    expect(fetchApi).toHaveBeenCalledTimes(2);
+    expect(fetchApi).toHaveBeenNthCalledWith(
+      1,
+      "/api/posts/post-1/like",
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
+    expect(result.ok).toBe(true);
   });
 });

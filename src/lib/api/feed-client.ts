@@ -97,6 +97,7 @@ function isRetryableWriteResult<T>(result: ApiResult<T>) {
   return (
     result.code === API_TIMEOUT_CODE.TIMEOUT_POST_CREATE ||
     result.code === API_TIMEOUT_CODE.TIMEOUT_POST_LIKE ||
+    result.code === API_TIMEOUT_CODE.TIMEOUT_POST_UNLIKE ||
     result.code === API_TIMEOUT_CODE.TIMEOUT_POST_REPORT
   );
 }
@@ -222,6 +223,17 @@ export async function likePostClient(
       timeoutMs: FEED_WRITE_TIMEOUT_MS,
       timeoutErrorMessage: "라이크 요청이 지연되고 있어요. 다시 시도해 주세요.",
       timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_LIKE,
+    }),
+  );
+}
+
+export async function unlikePostClient(postId: string) {
+  return runWithSingleRetry(() =>
+    fetchApi<{ likeCount: number }>(`/api/posts/${postId}/like`, {
+      method: "DELETE",
+      timeoutMs: FEED_WRITE_TIMEOUT_MS,
+      timeoutErrorMessage: "라이크 취소 요청이 지연되고 있어요. 다시 시도해 주세요.",
+      timeoutCode: API_TIMEOUT_CODE.TIMEOUT_POST_UNLIKE,
     }),
   );
 }
