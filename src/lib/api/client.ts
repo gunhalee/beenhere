@@ -4,6 +4,13 @@ import { redirectToLoginWithNext } from "@/lib/auth/login-redirect";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const DEFAULT_TIMEOUT_MS = 8000;
+const SESSION_RECHECK_ATTEMPTS = 2;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 type FetchOptions = {
   method?: "GET" | "POST" | "DELETE" | "PATCH";
@@ -54,7 +61,31 @@ async function tryRecoverBrowserSession() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return Boolean(user ?? session?.user);
+    if (user ?? session?.user) {
+      return true;
+    }
+
+    // Allow a couple of event-loop ticks so browser cookies can catch up
+    // when token refresh and subsequent API calls race in parallel.
+    for (let attempt = 0; attempt < SESSION_RECHECK_ATTEMPTS; attempt += 1) {
+      await sleep(0);
+
+      const {
+        data: { session: recheckedSession },
+      } = await supabase.auth.getSession();
+      if (recheckedSession?.user) {
+        return true;
+      }
+
+      const {
+        data: { user: recheckedUser },
+      } = await supabase.auth.getUser();
+      if (recheckedUser) {
+        return true;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.warn("[api/client] session recovery failed:", error);
     return false;
