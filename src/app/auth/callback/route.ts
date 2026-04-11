@@ -26,8 +26,8 @@ export async function GET(request: Request) {
       getAll() {
         return cookieBridge.getAll();
       },
-      setAll(cookiesToSet) {
-        cookieBridge.setAll(cookiesToSet);
+      setAll(cookiesToSet, headersToSet) {
+        cookieBridge.setAll(cookiesToSet, headersToSet);
       },
     },
   });

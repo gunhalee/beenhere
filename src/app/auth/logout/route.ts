@@ -1,13 +1,25 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getSupabaseConfig, hasSupabaseBrowserConfig } from "@/lib/supabase/config";
+import {
+  getSupabaseConfig,
+  hasSupabaseBrowserConfig,
+} from "@/lib/supabase/config";
 import { createRouteCookieBridge } from "@/lib/supabase/route-cookie-bridge";
+
+/**
+ * GET must be side-effect free so prefetch/speculative requests
+ * can never silently log users out.
+ */
+export async function GET(request: Request) {
+  const { origin } = new URL(request.url);
+  return NextResponse.redirect(`${origin}/auth/login`);
+}
 
 /**
  * Local sign-out only. After logout, always move to login landing.
  * signOut 이 설정하는 쿠키 삭제를 redirect 응답에 명시적으로 적용한다.
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const { origin } = new URL(request.url);
   const response = NextResponse.redirect(`${origin}/auth/login`);
   let cookieBridge: Awaited<ReturnType<typeof createRouteCookieBridge>> | null =
@@ -23,8 +35,8 @@ export async function GET(request: Request) {
         getAll() {
           return activeCookieBridge.getAll();
         },
-        setAll(cookiesToSet) {
-          activeCookieBridge.setAll(cookiesToSet);
+        setAll(cookiesToSet, headersToSet) {
+          activeCookieBridge.setAll(cookiesToSet, headersToSet);
         },
       },
     });
@@ -34,4 +46,3 @@ export async function GET(request: Request) {
 
   return cookieBridge ? cookieBridge.applyToResponse(response) : response;
 }
-

@@ -17,12 +17,13 @@ type PendingCookie = {
 export async function createRouteCookieBridge() {
   const cookieStore = await cookies();
   const pendingCookies = new Map<string, PendingCookie>();
+  const pendingHeaders = new Map<string, string>();
 
   return {
     getAll() {
       return cookieStore.getAll();
     },
-    setAll(cookiesToSet: PendingCookie[]) {
+    setAll(cookiesToSet: PendingCookie[], headersToSet?: Record<string, string>) {
       cookiesToSet.forEach(({ name, value, options }) => {
         pendingCookies.set(name, { name, value, options });
         try {
@@ -31,11 +32,20 @@ export async function createRouteCookieBridge() {
           // Route Handler outside mutable response scope.
         }
       });
+
+      Object.entries(headersToSet ?? {}).forEach(([key, value]) => {
+        pendingHeaders.set(key, value);
+      });
     },
     applyToResponse(response: NextResponse) {
       for (const { name, value, options } of pendingCookies.values()) {
         response.cookies.set(name, value, options);
       }
+
+      for (const [key, value] of pendingHeaders.entries()) {
+        response.headers.set(key, value);
+      }
+
       return response;
     },
   };

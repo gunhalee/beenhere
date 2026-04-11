@@ -1,4 +1,7 @@
 -- Make report_post explicitly return whether the report already existed.
+-- Return type changes from void -> jsonb; must drop first (CREATE OR REPLACE is not enough).
+
+DROP FUNCTION IF EXISTS public.report_post(uuid, text);
 
 CREATE OR REPLACE FUNCTION public.report_post(
   p_post_id uuid,
@@ -28,3 +31,5 @@ BEGIN
   );
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.report_post(uuid, text) TO authenticated;

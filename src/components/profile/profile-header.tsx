@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
@@ -215,23 +214,30 @@ export function ProfileHeader({
                           ? "프로필 이름 변경"
                           : `프로필 이름 변경 (${daysUntilRegen}일)`}
                     </button>
-                    <Link
-                      href="/auth/logout"
-                      onClick={() => {
-                        clearMyProfileCache();
-                        clearProfileCache();
-                      }}
-                      style={{
-                        color: "#ef4444",
-                        display: "block",
-                        fontSize: "14px",
-                        fontWeight: 500,
-                        padding: "12px 16px",
-                        textDecoration: "none",
-                      }}
-                    >
-                      로그아웃
-                    </Link>
+                    <form action="/auth/logout" method="post">
+                      <button
+                        onClick={() => {
+                          clearMyProfileCache();
+                          clearProfileCache();
+                        }}
+                        type="submit"
+                        style={{
+                          appearance: "none",
+                          background: "none",
+                          border: "none",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                          display: "block",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          padding: "12px 16px",
+                          textAlign: "left",
+                          width: "100%",
+                        }}
+                      >
+                        로그아웃
+                      </button>
+                    </form>
                   </>
                 ) : (
                   <button
