@@ -17,8 +17,16 @@ function mockJsonResponse<T>(payload: ApiResult<T>) {
 }
 
 function mockBrowserClient(accessToken: string | null) {
+  const getUser = vi.fn().mockResolvedValue({
+    data: {
+      user: accessToken ? { id: "user-1" } : null,
+    },
+    error: null,
+  });
+
   vi.mocked(getSupabaseBrowserClient).mockReturnValue({
     auth: {
+      getUser,
       getSession: vi.fn().mockResolvedValue({
         data: {
           session: accessToken ? { access_token: accessToken } : null,
@@ -87,7 +95,7 @@ describe("fetchApi", () => {
       error: "unauthorized",
       code: "UNAUTHORIZED",
     });
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
   it("sends Content-Type header and serialized body for POST", async () => {
@@ -146,5 +154,61 @@ describe("fetchApi", () => {
       error: "network down",
       code: "NETWORK_ERROR",
     });
+  });
+
+  it("retries once after unauthorized when session resync succeeds", async () => {
+    const getSession = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: { session: { access_token: "stale-token" } },
+      })
+      .mockResolvedValueOnce({
+        data: { session: { access_token: "fresh-token" } },
+      });
+
+    const getUser = vi
+      .fn()
+      .mockResolvedValue({ data: { user: { id: "user-1" } }, error: null });
+
+    vi.mocked(getSupabaseBrowserClient).mockReturnValue({
+      auth: { getSession, getUser },
+    } as never);
+
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          ok: false,
+          error: "unauthorized",
+          code: "UNAUTHORIZED",
+        }),
+      )
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          ok: true,
+          data: { value: 42 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const result = await fetchApi<{ value: number }>("/api/test");
+
+    expect(result).toEqual({ ok: true, data: { value: 42 } });
+    expect(getUser).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer stale-token",
+        }),
+      }),
+    );
+    expect(fetchSpy.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer fresh-token",
+        }),
+      }),
+    );
   });
 });

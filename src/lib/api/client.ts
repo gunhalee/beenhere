@@ -12,6 +12,18 @@ type FetchOptions = {
   timeoutCode?: string;
 };
 
+async function syncBrowserSession() {
+  if (typeof window === "undefined") return;
+
+  const supabase = getSupabaseBrowserClient();
+
+  // getUser() forces the auth client to reconcile the current session
+  // with Supabase Auth instead of trusting only locally cached state.
+  // This reduces cases where getSession() returns a stale access token
+  // that the server rejects immediately.
+  await supabase.auth.getUser();
+}
+
 async function getAccessToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   try {
@@ -55,24 +67,44 @@ export async function fetchApi<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const accessToken = await getAccessToken();
+    const requestOnce = async () => {
+      const accessToken = await getAccessToken();
 
-    const headers: Record<string, string> = {};
-    if (body !== undefined) {
-      headers["Content-Type"] = "application/json";
+      const headers: Record<string, string> = {};
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
+      const response = await fetch(path, {
+        method,
+        headers: Object.keys(headers).length ? headers : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+
+      return (await response.json()) as ApiResult<T>;
+    };
+
+    await syncBrowserSession();
+
+    const firstResult = await requestOnce();
+    if (
+      !firstResult.ok &&
+      firstResult.code === API_ERROR_CODE.UNAUTHORIZED &&
+      typeof window !== "undefined"
+    ) {
+      try {
+        await syncBrowserSession();
+        return await requestOnce();
+      } catch {
+        return firstResult;
+      }
     }
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
 
-    const response = await fetch(path, {
-      method,
-      headers: Object.keys(headers).length ? headers : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-
-    return (await response.json()) as ApiResult<T>;
+    return firstResult;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return { ok: false, error: timeoutErrorMessage, code: timeoutCode };
