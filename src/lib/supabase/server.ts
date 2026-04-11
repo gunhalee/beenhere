@@ -57,23 +57,30 @@ function extractBearerToken(raw: string | null) {
 }
 
 /**
- * 쿠키 → bearer 토큰 이중 경로로 인증된 유저를 반환한다.
+ * bearer 토큰 → 쿠키 세션 순서로 인증된 유저를 반환한다.
  *
  * 모든 Route Handler 에서 supabase.auth.getUser() 를 직접 호출하는
- * 대신 이 함수를 사용해야 한다. 쿠키 세션이 만료/누락됐을 때
- * 클라이언트가 보낸 Authorization 헤더의 access token 으로 폴백한다.
+ * 대신 이 함수를 사용해야 한다.
+ *
+ * Authorization 헤더가 있으면 그것만으로 먼저 검증한다.
+ * 이렇게 해야 서버가 쿠키 세션을 먼저 읽으면서 refresh token 을
+ * 소비하지 않고, 브라우저 클라이언트와의 refresh 경합을 피할 수 있다.
+ *
+ * Authorization 헤더가 없을 때만 쿠키 세션으로 getUser() 를 호출한다.
  */
 export async function getServerUser(supabase: ServerClient) {
-  const cookieResult = await supabase.auth.getUser();
-  if (cookieResult.data.user) return cookieResult.data.user;
-
   const requestHeaders = await headers();
   const token = extractBearerToken(requestHeaders.get("authorization"));
-  if (!token) return null;
 
-  const bearerResult = await supabase.auth.getUser(token);
-  if (bearerResult.error || !bearerResult.data.user) return null;
-  return bearerResult.data.user;
+  if (token) {
+    const bearerResult = await supabase.auth.getUser(token);
+    if (bearerResult.data.user) return bearerResult.data.user;
+    return null;
+  }
+
+  const cookieResult = await supabase.auth.getUser();
+  if (cookieResult.error || !cookieResult.data.user) return null;
+  return cookieResult.data.user;
 }
 
 /**

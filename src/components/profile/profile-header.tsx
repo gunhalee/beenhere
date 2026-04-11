@@ -58,8 +58,7 @@ export function ProfileHeader({
 
     if (!result.ok) {
       if (result.code === API_ERROR_CODE.UNAUTHORIZED) {
-        setRegenError("세션이 만료되어 로그인이 필요해요.");
-        onAuthRequired?.();
+        setRegenError("세션 확인에 실패했어요. 잠시 후 다시 시도해 주세요.");
         return;
       }
 
