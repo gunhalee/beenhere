@@ -65,10 +65,15 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Skip session checks in mock mode when Supabase is not configured.
   if (!supabaseUrl || !supabaseAnonKey) {
     return response;
   }
+
+  // Snapshot BEFORE getUser() — if a concurrent request already consumed
+  // the refresh token, getUser() triggers setAll() with session-deleting
+  // cookies. We must be able to return a clean response in that case.
+  const hadAuthCookie = hasSupabaseAuthCookie(request);
+  const originalRequestHeaders = new Headers(request.headers);
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -89,9 +94,20 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // Keep middleware as the canonical server-side auth check.
   const userResult = await supabase.auth.getUser();
   const user = userResult.data.user;
+
+  // When a refresh token race occurs (concurrent request already consumed
+  // the token), @supabase/ssr calls setAll() with empty cookie values,
+  // effectively deleting the session. DO NOT propagate these deletion
+  // cookies — return a clean pass-through so the browser keeps its
+  // existing session cookies intact. The successful concurrent request's
+  // response will deliver the refreshed cookies.
+  if (!user && hadAuthCookie && isLikelyRefreshRaceError(userResult.error)) {
+    return NextResponse.next({
+      request: { headers: originalRequestHeaders },
+    });
+  }
 
   const { pathname } = request.nextUrl;
   const forceLanding =
@@ -101,17 +117,6 @@ export async function middleware(request: NextRequest) {
     const nextPath = sanitizeNextPath(request.nextUrl.searchParams.get("next"));
     const redirectResponse = NextResponse.redirect(new URL(nextPath, request.url));
     return withSupabaseSessionHeaders(response, redirectResponse);
-  }
-
-  const shouldAllowTransientAuthDesync =
-    !user &&
-    !isApiPath(pathname) &&
-    !isPublicUnauthPath(pathname) &&
-    hasSupabaseAuthCookie(request) &&
-    isLikelyRefreshRaceError(userResult.error);
-
-  if (shouldAllowTransientAuthDesync) {
-    return response;
   }
 
   if (!user && !isApiPath(pathname) && !isPublicUnauthPath(pathname)) {

@@ -65,9 +65,8 @@ function extractBearerToken(rawHeader: string | null) {
  * 경계에서 미들웨어가 갱신한 쿠키가 Route Handler 에 전파되지 않는
  * 경우가 있어 bearer token 폴백이 필요하다.
  *
- * 주의: bearer token 은 getUser() 검증에만 사용한다.
- * Supabase 클라이언트의 global.headers 에는 설정하지 않으므로
- * RLS 쿼리는 쿠키 기반 auth.uid() 로 동작한다.
+ * createSupabaseServerClient() 는 global.headers.Authorization 도
+ * 설정하므로, RLS 쿼리의 auth.uid() 역시 동일한 토큰으로 평가된다.
  */
 async function getAuthenticatedUser(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
